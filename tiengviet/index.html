@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Hành Tinh Bé Yêu - Game Giáo Dục</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            font-family: 'Fredoka One', cursive;
+            touch-action: none; /* Ngăn chặn cuộn trang trên mobile */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-radius: 20px;
+            background: white;
+            cursor: pointer;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn {
+            pointer-events: auto;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #ee5253;
+            transition: transform 0.1s;
+            font-family: 'Fredoka One', cursive;
+            text-transform: uppercase;
+            margin-top: 20px;
+        }
+
+        .btn:active {
+            transform: translateY(6px);
+            box-shadow: none;
+        }
+
+        #title-screen, #win-screen {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 40px;
+            border-radius: 30px;
+            text-align: center;
+            border: 5px solid #4ecdc4;
+        }
+
+        h1 { color: #ff6b6b; font-size: 40px; margin: 0 0 20px 0; text-shadow: 2px 2px #ffe66d; }
+        p { color: #555; font-size: 20px; margin: 10px 0; }
+        
+        .hidden { display: none !important; }
+        
+        /* Hiệu ứng nảy */
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-30px);}
+            60% {transform: translateY(-15px);}
+        }
+        .bounce { animation: bounce 2s infinite; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div id="title-screen">
+            <h1 class="bounce">Hành Tinh Bé Yêu</h1>
+            <p>Game giáo dục cho bé 2-6 tuổi</p>
+            <button class="btn" onclick="startGame()">Bắt đầu chơi</button>
+        </div>
+
+        <div id="win-screen" class="hidden">
+            <h1>Hoan hô! Bé giỏi quá!</h1>
+            <p id="level-msg">Đã hoàn thành cấp độ</p>
+            <button class="btn" onclick="nextLevel()">Màn tiếp theo</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Cấu hình Game
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiLayer = document.getElementById('ui-layer');
+    const titleScreen = document.getElementById('title-screen');
+    const winScreen = document.getElementById('win-screen');
+
+    let screenWidth, screenHeight;
+    let currentLevel = 1;
+    let draggables = [];
+    let targets = [];
+    let particles = [];
+    let isDragging = false;
+    let dragItem = null;
+    let offsetX, offsetY;
+    
+    // Giọng đọc chị Google (Text to Speech)
+    const speak = (text) => {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'vi-VN';
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
+    // Thiết lập kích thước Canvas
+    function resize() {
+        screenWidth = window.innerWidth > 800 ? 800 : window.innerWidth - 20;
+        screenHeight = window.innerHeight > 600 ? 600 : window.innerHeight - 20;
+        canvas.width = screenWidth;
+        canvas.height = screenHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Lớp đối tượng hình học
+    class Shape {
+        constructor(id, type, color, value, x, y, isTarget = false) {
+            this.id = id;
+            this.type = type; // 'rect', 'circle', 'triangle', 'star'
+            this.color = color;
+            this.value = value; // Dùng cho màn đếm số
+            this.x = x;
+            this.y = y;
+            this.size = 40; // Kích thước cơ bản
+            this.isTarget = isTarget;
+            this.isMatched = false;
+            this.scale = 1;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            
+            // Vẽ bóng
+            ctx.fillStyle = "rgba(0,0,0,0.1)";
+            this.drawPath(5, 5); 
+            ctx.fill();
+
+            // Vẽ hình chính
+            ctx.fillStyle = this.isTarget && !this.isMatched ? "#eee" : this.color;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 3;
+            
+            if (this.isTarget) {
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                if(this.isMatched) ctx.fill(); // Đã khớp thì tô màu
+            } else {
+                ctx.fill();
+                // Hiệu ứng viền trắng cho cute
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+
+            this.drawPath(0, 0);
+
+            // Vẽ số hoặc chữ nếu có
+            if (this.value) {
+                ctx.fillStyle = "white";
+                ctx.font = "bold 30px 'Fredoka One'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.value, 0, 0);
+            }
+
+            ctx.restore();
+        }
+
+        drawPath(ox, oy) {
+            ctx.beginPath();
+            if (this.type === 'circle') {
+                ctx.arc(ox, oy, this.size, 0, Math.PI * 2);
+            } else if (this.type === 'rect') {
+                ctx.rect(ox - this.size, oy - this.size, this.size * 2, this.size * 2);
+            } else if (this.type === 'triangle') {
+                ctx.moveTo(ox, oy - this.size);
+                ctx.lineTo(ox + this.size, oy + this.size);
+                ctx.lineTo(ox - this.size, oy + this.size);
+                ctx.closePath();
+            } else if (this.type === 'star') {
+                // Vẽ ngôi sao
+                for (let i = 0; i < 5; i++) {
+                    ctx.lineTo(Math.cos((18 + i * 72) / 180 * Math.PI) * this.size + ox,
+                               -Math.sin((18 + i * 72) / 180 * Math.PI) * this.size + oy);
+                    ctx.lineTo(Math.cos((54 + i * 72) / 180 * Math.PI) * (this.size / 2) + ox,
+                               -Math.sin((54 + i * 72) / 180 * Math.PI) * (this.size / 2) + oy);
+                }
+                ctx.closePath();
+            }
+        }
+
+        contains(mx, my) {
+            // Kiểm tra va chạm đơn giản (bounding box)
+            return mx >= this.x - this.size && mx <= this.x + this.size &&
+                   my >= this.y - this.size && my <= this.y + this.size;
+        }
+    }
+
+    // Hiệu ứng Pháo hoa (Confetti)
+    function createParticles(x, y) {
+        for (let i = 0; i < 30; i++) {
+            particles.push({
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                life: 1.0,
+                color: `hsl(${Math.random() * 360}, 100%, 50%)`
+            });
+        }
+    }
+
+    function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.02;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+    }
+
+    function drawParticles() {
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        });
+    }
+
+    // Thiết lập Level
+    function setupLevel(level) {
+        draggables = [];
+        targets = [];
+        
+        let shapes = [];
+        let promptText = "";
+
+        if (level === 1) {
+            promptText = "Bé hãy tìm đúng hình dạng nhé!";
+            shapes = [
+                {id: 1, type: 'circle', color: '#ff6b6b', val: ''},
+                {id: 2, type: 'rect', color: '#4ecdc4', val: ''},
+                {id: 3, type: 'triangle', color: '#ffe66d', val: ''}
+            ];
+        } else if (level === 2) {
+            promptText = "Bé hãy ghép đúng màu sắc nào!";
+            shapes = [
+                {id: 1, type: 'star', color: '#ff6b6b', val: ''}, // Đỏ
+                {id: 2, type: 'star', color: '#4ecdc4', val: ''}, // Xanh ngọc
+                {id: 3, type: 'star', color: '#a55eea', val: ''}  // Tím
+            ];
+        } else if (level === 3) {
+            promptText = "Bé hãy tập đếm số nhé!";
+            shapes = [
+                {id: 1, type: 'circle', color: '#ff9ff3', val: '1'},
+                {id: 2, type: 'circle', color: '#54a0ff', val: '2'},
+                {id: 3, type: 'circle', color: '#5f27cd', val: '3'},
+                {id: 4, type: 'circle', color: '#48dbfb', val: '4'}
+            ];
+        } else {
+            // Reset về level 1 nếu hết
+            currentLevel = 1;
+            setupLevel(1);
+            return;
+        }
+
+        speak(promptText);
+
+        // Tạo vị trí ngẫu nhiên cho items (phía dưới)
+        let spacing = screenWidth / (shapes.length + 1);
+        shapes.forEach((s, i) => {
+            // Mục tiêu (Targets) nằm phía trên
+            targets.push(new Shape(s.id, s.type, s.color, s.val, spacing * (i + 1), screenHeight * 0.3, true));
+            
+            // Vật thể kéo thả (Draggables) nằm phía dưới (đảo lộn vị trí một chút)
+            // Sắp xếp ngẫu nhiên mảng shapes để tạo vị trí kéo thả
+        });
+
+        // Clone mảng và đảo lộn để tạo vật thể kéo thả
+        let shuffled = [...shapes].sort(() => Math.random() - 0.5);
+        shuffled.forEach((s, i) => {
+             draggables.push(new Shape(s.id, s.type, s.color, s.val, spacing * (i + 1), screenHeight * 0.75, false));
+        });
+    }
+
+    // Game Loop
+    function update() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Vẽ nền trang trí (mây, cỏ đơn giản)
+        ctx.fillStyle = "#e0f7fa"; // Nền trời nhẹ
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+        
+        // Vẽ Target (vùng thả)
+        targets.forEach(t => t.draw());
+
+        // Vẽ dây nối (nếu đang kéo)
+        if (isDragging && dragItem) {
+            // Có thể thêm hiệu ứng dây nối ở đây nếu muốn
+        }
+
+        // Vẽ Draggables (vật thể)
+        draggables.forEach(d => {
+            if (d !== dragItem) d.draw();
+        });
+        if (dragItem) dragItem.draw(); // Vẽ vật đang kéo sau cùng để nổi lên trên
+
+        // Hạt hiệu ứng
+        updateParticles();
+        drawParticles();
+
+        requestAnimationFrame(update);
+    }
+
+    // Xử lý sự kiện chuột/cảm ứng
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+        };
+    }
+
+    canvas.addEventListener('mousedown', startDrag);
+    canvas.addEventListener('touchstart', startDrag, {passive: false});
+
+    canvas.addEventListener('mousemove', drag);
+    canvas.addEventListener('touchmove', drag, {passive: false});
+
+    canvas.addEventListener('mouseup', endDrag);
+    canvas.addEventListener('touchend', endDrag);
+
+    function startDrag(e) {
+        e.preventDefault(); // Ngăn cuộn trang
+        const pos = getPos(e);
+        // Kiểm tra xem click vào draggables nào (duyệt ngược để lấy cái trên cùng)
+        for (let i = draggables.length - 1; i >= 0; i--) {
+            if (draggables[i].contains(pos.x, pos.y) && !draggables[i].isMatched) {
+                dragItem = draggables[i];
+                isDragging = true;
+                offsetX = pos.x - dragItem.x;
+                offsetY = pos.y - dragItem.y;
+                dragItem.scale = 1.2; // Phóng to khi nhấc lên
+                speak(dragItem.value || "Cái này"); // Đọc tên (nếu có số)
+                return;
+            }
+        }
+    }
+
+    function drag(e) {
+        if (isDragging && dragItem) {
+            e.preventDefault();
+            const pos = getPos(e);
+            dragItem.x = pos.x - offsetX;
+            dragItem.y = pos.y - offsetY;
+        }
+    }
+
+    function endDrag(e) {
+        if (!isDragging || !dragItem) return;
+        
+        // Kiểm tra va chạm với Targets
+        let hit = false;
+        for (let t of targets) {
+            // Khoảng cách giữa vật kéo và mục tiêu
+            let dx = dragItem.x - t.x;
+            let dy = dragItem.y - t.y;
+            let distance = Math.sqrt(dx*dx + dy*dy);
+
+            if (distance < 50 && dragItem.id === t.id) {
+                // Khớp đúng!
+                hit = true;
+                dragItem.x = t.x;
+                dragItem.y = t.y;
+                dragItem.isMatched = true;
+                dragItem.scale = 1;
+                t.isMatched = true; // Target sáng lên
+                
+                createParticles(t.x, t.y);
+                speak("Đúng rồi! Bé giỏi quá");
+                
+                // Loại bỏ khỏi danh sách kéo để ko kéo được nữa
+                // Nhưng vẫn giữ trong mảng draggables để vẽ đè lên target
+                break;
+            }
+        }
+
+        if (!hit) {
+            // Nếu sai, trả về vị trí cũ (có thể làm hiệu ứng bay về, ở đây làm đơn giản)
+            // Cần lưu vị trí gốc để trả về, nhưng để đơn giản ta đẩy nhẹ xuống dưới
+            if(!dragItem.isMatched) {
+                dragItem.y = screenHeight * 0.75; // Trả về vùng dưới
+                speak("Chưa đúng rồi, thử lại nhé");
+            }
+            dragItem.scale = 1;
+        }
+
+        isDragging = false;
+        dragItem = null;
+
+        checkWin();
+    }
+
+    function checkWin() {
+        const allMatched = targets.every(t => t.isMatched);
+        if (allMatched) {
+            setTimeout(() => {
+                winScreen.classList.remove('hidden');
+                speak("Chúc mừng! Bé đã hoàn thành màn chơi.");
+                // Bắn pháo hoa nhiều
+                createParticles(screenWidth/2, screenHeight/2);
+            }, 500);
+        }
+    }
+
+    // Logic Game Flow
+    function startGame() {
+        titleScreen.classList.add('hidden');
+        setupLevel(currentLevel);
+        update();
+    }
+
+    function nextLevel() {
+        winScreen.classList.add('hidden');
+        currentLevel++;
+        setupLevel(currentLevel);
+    }
+
+</script>
+</body>
+</html>
