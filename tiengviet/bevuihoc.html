@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bé Vui Học - Flashcard & Quiz</title>
+    <style>
+        /* * 🎨 PHẦN 1: CSS - GIAO DIỆN & HIỆU ỨNG
+         * Phong cách: Pastel, bo tròn, hoạt hình.
+         */
+        :root {
+            --primary: #FF9A9E;    /* Hồng pastel */
+            --secondary: #A18CD1;  /* Tím pastel */
+            --accent: #FBC2EB;     /* Nhấn */
+            --success: #84fab0;    /* Xanh lá - Đúng */
+            --error: #ff9a9e;      /* Đỏ hồng - Sai */
+            --text: #555;          /* Màu chữ xám dịu */
+            --bg: #fdfbf7;         /* Màu nền kem */
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-family);
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none; /* Trẻ không thể bôi đen chữ */
+        }
+
+        /* --- Header --- */
+        header {
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: var(--secondary); }
+        
+        .btn-icon {
+            background: #f0f0f0;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-icon:active { transform: scale(0.9); }
+
+        /* --- Main Container --- */
+        #game-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 20px;
+        }
+
+        /* --- Screens (Màn hình) --- */
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.5s ease;
+        }
+        .screen.active { display: flex; }
+
+        /* --- HOME SCREEN --- */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .category-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 10px;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 3px solid transparent;
+        }
+        
+        .category-card:active { transform: scale(0.95); }
+        .category-card:hover { border-color: var(--accent); }
+        
+        .cat-icon { font-size: 3rem; display: block; margin-bottom: 10px; }
+        .cat-name { font-size: 1.2rem; font-weight: bold; color: var(--text); }
+
+        /* --- FLASHCARD SCREEN --- */
+        .flashcard {
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 3/4;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            border: 5px solid var(--accent);
+            transition: transform 0.3s;
+        }
+
+        .flashcard:active { transform: scale(0.98); }
+
+        .card-content { font-size: 8rem; line-height: 1; }
+        .card-text { font-size: 2.5rem; margin-top: 20px; font-weight: bold; color: var(--secondary); }
+
+        .nav-controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn-nav {
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: none;
+            background: var(--secondary);
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(161, 140, 209, 0.4);
+            cursor: pointer;
+        }
+        .btn-nav:active { transform: translateY(2px); }
+
+        /* --- GAME MODE SCREEN --- */
+        .question-text { font-size: 1.5rem; margin-bottom: 30px; text-align: center; }
+        
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .option-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            font-size: 3rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            cursor: pointer;
+            border: 3px solid #eee;
+        }
+
+        /* --- Animations & Effects --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pop { 50% { transform: scale(1.2); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+
+        .anim-pop { animation: pop 0.3s ease; }
+        .anim-shake { animation: shake 0.4s ease; border-color: var(--error) !important; background: #fff0f0; }
+        .anim-correct { border-color: var(--success) !important; background: #f0fff4; }
+
+        /* --- Overlay Feedback --- */
+        #feedback-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8);
+            display: none; justify-content: center; align-items: center; z-index: 100;
+            flex-direction: column;
+        }
+        #feedback-icon { font-size: 6rem; margin-bottom: 20px; }
+        #feedback-text { font-size: 2rem; font-weight: bold; color: var(--secondary); }
+
+        /* --- Bottom Menu --- */
+        .bottom-bar {
+            padding: 15px;
+            background: white;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #eee;
+        }
+        .tab-btn {
+            border: none; background: none; font-size: 1rem;
+            color: #999; font-weight: bold; padding: 10px 20px;
+            border-radius: 20px;
+        }
+        .tab-btn.active { background: var(--accent); color: white; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <button class="btn-icon" onclick="App.goHome()">🏠</button>
+        <h1 id="screen-title">Bé Vui Học</h1>
+        <button class="btn-icon" id="sound-btn" onclick="AudioEngine.toggleSound()">🔊</button>
+    </header>
+
+    <div id="game-container">
+        
+        <div id="screen-home" class="screen active">
+            <h2 style="color: var(--primary); margin-bottom: 30px;">Bé muốn học gì nào?</h2>
+            <div class="menu-grid" id="menu-list">
+                </div>
+        </div>
+
+        <div id="screen-learn" class="screen">
+            <div class="flashcard" id="flashcard" onclick="Game.playCardAudio()">
+                <div class="card-content" id="fc-content">A</div>
+                <div class="card-text" id="fc-text">Chữ A</div>
+            </div>
+            <div class="nav-controls">
+                <button class="btn-nav" onclick="Game.prevCard()">⬅️</button>
+                <button class="btn-nav" onclick="Game.nextCard()">➡️</button>
+            </div>
+            <p style="margin-top: 15px; color: #999; font-size: 0.9rem;">(Bấm vào thẻ để nghe)</p>
+        </div>
+
+        <div id="screen-play" class="screen">
+            <div class="question-text" id="quiz-question">Tìm con mèo ở đâu?</div>
+            <div class="options-grid" id="quiz-options">
+                </div>
+            <div style="margin-top: 30px; font-size: 1.5rem;">
+                ⭐ Điểm: <span id="score">0</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bottom-bar">
+        <button class="tab-btn active" id="tab-learn" onclick="App.switchMode('learn')">📖 Học Tập</button>
+        <button class="tab-btn" id="tab-play" onclick="App.switchMode('play')">🎮 Trò Chơi</button>
+    </div>
+
+    <div id="feedback-overlay">
+        <div id="feedback-icon">🌟</div>
+        <div id="feedback-text">Hoan hô!</div>
+    </div>
+
+    <script>
+        /**
+         * ⚙️ PHẦN 2: CONFIG - DỮ LIỆU CÂU HỎI
+         * Dễ dàng chỉnh sửa nội dung tại đây.
+         */
+        const DATA = {
+            letters: [
+                { id: 'l1', content: 'A', text: 'Chữ A', speak: 'A', color: '#FF9A9E' },
+                { id: 'l2', content: 'B', text: 'Chữ B', speak: 'Bờ', color: '#A18CD1' },
+                { id: 'l3', content: 'C', text: 'Chữ C', speak: 'Cờ', color: '#FBC2EB' },
+                { id: 'l4', content: 'D', text: 'Chữ D', speak: 'Dờ', color: '#84fab0' },
+                { id: 'l5', content: 'E', text: 'Chữ E', speak: 'E', color: '#ff9a9e' }
+            ],
+            numbers: [
+                { id: 'n1', content: '1', text: 'Số Một', speak: 'Số một', color: '#a8edea' },
+                { id: 'n2', content: '2', text: 'Số Hai', speak: 'Số hai', color: '#fed6e3' },
+                { id: 'n3', content: '3', text: 'Số Ba', speak: 'Số ba', color: '#d299c2' },
+                { id: 'n4', content: '4', text: 'Số Bốn', speak: 'Số bốn', color: '#fef9d7' },
+                { id: 'n5', content: '5', text: 'Số Năm', speak: 'Số năm', color: '#d4fc79' }
+            ],
+            animals: [
+                { id: 'a1', content: '🐶', text: 'Con Chó', speak: 'Con Chó', color: '#ffecd2' },
+                { id: 'a2', content: '🐱', text: 'Con Mèo', speak: 'Con Mèo', color: '#fcb69f' },
+                { id: 'a3', content: '🦁', text: 'Sư Tử', speak: 'Sư Tử', color: '#ff9a9e' },
+                { id: 'a4', content: '🐘', text: 'Con Voi', speak: 'Con Voi', color: '#e0c3fc' },
+                { id: 'a5', content: '🐸', text: 'Con Ếch', speak: 'Con Ếch', color: '#8ec5fc' }
+            ]
+        };
+
+        const CATEGORIES = [
+            { id: 'letters', name: 'Chữ Cái', icon: '🅰️', data: DATA.letters },
+            { id: 'numbers', name: 'Số Đếm', icon: '1️⃣', data: DATA.numbers },
+            { id: 'animals', name: 'Con Vật', icon: '🐼', data: DATA.animals }
+        ];
+
+        /**
+         * 🔊 PHẦN 3: AUDIO ENGINE (Không cần file ngoài)
+         */
+        const AudioEngine = {
+            enabled: true,
+            synth: window.speechSynthesis,
+            audioCtx: new (window.AudioContext || window.webkitAudioContext)(),
+            
+            toggleSound() {
+                this.enabled = !this.enabled;
+                document.getElementById('sound-btn').innerText = this.enabled ? '🔊' : '🔇';
+            },
+
+            // Đọc văn bản (TTS)
+            speak(text) {
+                if (!this.enabled) return;
+                // Cancel old speech
+                if (this.synth.speaking) this.synth.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'vi-VN'; // Ưu tiên tiếng Việt
+                utterance.rate = 0.9;     // Đọc chậm rãi cho trẻ
+                utterance.pitch = 1.1;    // Giọng cao hơn chút cho vui
+                this.synth.speak(utterance);
+            },
+
+            // Tạo âm thanh Hiệu ứng (SFX) bằng Oscillator
+            playTone(type) {
+                if (!this.enabled) return;
+                if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(this.audioCtx.destination);
+
+                const now = this.audioCtx.currentTime;
+
+                if (type === 'correct') {
+                    // Âm thanh chiến thắng (Ding!)
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); // C6
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                } else if (type === 'wrong') {
+                    // Âm thanh sai (Buzz)
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            }
+        };
+
+        /**
+         * 🎮 PHẦN 4: LOGIC GAME
+         */
+        const Game = {
+            currentCategory: null,
+            currentIndex: 0,
+            mode: 'learn', // 'learn' or 'play'
+            score: 0,
+
+            // Khởi tạo danh mục
+            setCategory(catId) {
+                this.currentCategory = CATEGORIES.find(c => c.id === catId);
+                this.currentIndex = 0;
+                this.score = 0;
+                document.getElementById('score').innerText = this.score;
+                
+                App.showScreen(this.mode === 'learn' ? 'screen-learn' : 'screen-play');
+                
+                if (this.mode === 'learn') this.renderFlashcard();
+                else this.initQuiz();
+            },
+
+            // --- Logic Flashcard ---
+            renderFlashcard() {
+                const item = this.currentCategory.data[this.currentIndex];
+                const card = document.getElementById('flashcard');
+                const content = document.getElementById('fc-content');
+                const text = document.getElementById('fc-text');
+
+                // Animation chuyển cảnh nhẹ
+                card.style.opacity = 0;
+                setTimeout(() => {
+                    content.innerText = item.content;
+                    text.innerText = item.text;
+                    card.style.borderColor = item.color; // Đổi màu viền theo item
+                    card.style.opacity = 1;
+                    
+                    // Tự động đọc tên
+                    this.playCardAudio();
+                }, 200);
+            },
+
+            playCardAudio() {
+                const item = this.currentCategory.data[this.currentIndex];
+                
+                // Hiệu ứng nhún
+                const card = document.getElementById('flashcard');
+                card.classList.remove('anim-pop');
+                void card.offsetWidth; // Trigger reflow
+                card.classList.add('anim-pop');
+
+                AudioEngine.speak(item.speak);
+            },
+
+            nextCard() {
+                this.currentIndex = (this.currentIndex + 1) % this.currentCategory.data.length;
+                this.renderFlashcard();
+            },
+            
+            prevCard() {
+                this.currentIndex = (this.currentIndex - 1 + this.currentCategory.data.length) % this.currentCategory.data.length;
+                this.renderFlashcard();
+            },
+
+            // --- Logic Quiz ---
+            initQuiz() {
+                const data = this.currentCategory.data;
+                // Chọn 1 câu đúng ngẫu nhiên
+                const targetIndex = Math.floor(Math.random() * data.length);
+                const targetItem = data[targetIndex];
+
+                // Chọn 3 đáp án (1 đúng + 2 sai)
+                let options = [targetItem];
+                while (options.length < 3) { // Game cho trẻ nhỏ nên 3 lựa chọn là đủ
+                    const randomItem = data[Math.floor(Math.random() * data.length)];
+                    if (!options.includes(randomItem)) options.push(randomItem);
+                }
+                
+                // Xáo trộn đáp án
+                options.sort(() => Math.random() - 0.5);
+
+                // Render câu hỏi
+                document.getElementById('quiz-question').innerText = `Tìm: "${targetItem.speak}"`;
+                AudioEngine.speak("Hãy tìm " + targetItem.speak);
+
+                const container = document.getElementById('quiz-options');
+                container.innerHTML = '';
+
+                options.forEach(opt => {
+                    const el = document.createElement('div');
+                    el.className = 'option-card';
+                    el.innerText = opt.content;
+                    el.onclick = () => this.checkAnswer(el, opt.id === targetItem.id, targetItem);
+                    container.appendChild(el);
+                });
+            },
+
+            checkAnswer(element, isCorrect, targetItem) {
+                if (isCorrect) {
+                    // Xử lý ĐÚNG
+                    element.classList.add('anim-correct');
+                    AudioEngine.playTone('correct');
+                    this.score++;
+                    document.getElementById('score').innerText = this.score;
+                    
+                    this.showFeedback(true);
+                    
+                    // Chuyển câu sau 1.5s
+                    setTimeout(() => {
+                        this.initQuiz();
+                    }, 1500);
+
+                } else {
+                    // Xử lý SAI
+                    element.classList.add('anim-shake');
+                    AudioEngine.playTone('wrong');
+                    AudioEngine.speak("Sai rồi, thử lại nhé");
+                    
+                    // Xóa class rung để rung lại lần sau
+                    setTimeout(() => element.classList.remove('anim-shake'), 500);
+                }
+            },
+
+            showFeedback(isSuccess) {
+                const overlay = document.getElementById('feedback-overlay');
+                overlay.style.display = 'flex';
+                AudioEngine.speak("Hoan hô! Giỏi quá");
+                
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 1000);
+            }
+        };
+
+        /**
+         * 📱 PHẦN 5: UI MANAGER
+         */
+        const App = {
+            init() {
+                this.renderMenu();
+                // Bật context âm thanh khi click lần đầu (Bắt buộc bởi trình duyệt)
+                document.body.addEventListener('click', () => {
+                    if (AudioEngine.audioCtx.state === 'suspended') {
+                        AudioEngine.audioCtx.resume();
+                    }
+                }, { once: true });
+            },
+
+            renderMenu() {
+                const list = document.getElementById('menu-list');
+                list.innerHTML = '';
+                CATEGORIES.forEach(cat => {
+                    const el = document.createElement('div');
+                    el.className = 'category-card';
+                    el.innerHTML = `
+                        <span class="cat-icon">${cat.icon}</span>
+                        <span class="cat-name">${cat.name}</span>
+                    `;
+                    el.onclick = () => Game.setCategory(cat.id);
+                    list.appendChild(el);
+                });
+            },
+
+            showScreen(id) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById(id).classList.add('active');
+                
+                // Cập nhật tiêu đề header
+                if (id === 'screen-home') {
+                    document.getElementById('screen-title').innerText = "Bé Vui Học";
+                    document.querySelector('.bottom-bar').style.display = 'none';
+                } else {
+                    document.getElementById('screen-title').innerText = Game.currentCategory.name;
+                    document.querySelector('.bottom-bar').style.display = 'flex';
+                }
+            },
+
+            goHome() {
+                this.showScreen('screen-home');
+                Game.currentCategory = null;
+            },
+
+            switchMode(mode) {
+                Game.mode = mode;
+                
+                // Cập nhật UI tab
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`tab-${mode}`).classList.add('active');
+
+                // Reload lại game theo mode
+                if (Game.currentCategory) {
+                    Game.setCategory(Game.currentCategory.id);
+                }
+            }
+        };
+
+        // Khởi chạy ứng dụng
+        App.init();
+
+    </script>
+</body>
+</html>
