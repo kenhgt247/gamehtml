@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>100 Game Toán Học (4–10 tuổi)</title>
+
+<style>
+/* =========================
+   UI & THEME (PASTEL)
+========================= */
+:root{
+  --bg:#f7f9ff; --card:#ffffff; --primary:#6c7cff; --accent:#ffd166;
+  --ok:#2ec4b6; --bad:#ff6b6b; --text:#2b2d42;
+}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text)}
+#app{min-height:100%;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);width:100%;max-width:900px;padding:16px}
+h1,h2,h3{margin:.2em 0}
+.btn{border:0;border-radius:999px;padding:14px 18px;font-size:18px;background:var(--primary);color:#fff;cursor:pointer}
+.btn.secondary{background:#e9ecff;color:#3d44ff}
+.btn.warn{background:var(--accent);color:#6b4f00}
+.btn:active{transform:scale(.98)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.game-tile{padding:14px;border-radius:14px;background:#eef1ff;text-align:center;cursor:pointer}
+.game-tile small{opacity:.7}
+.center{text-align:center}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center}
+.big{font-size:28px}
+.answer{padding:14px 18px;border-radius:14px;background:#f1f3ff;cursor:pointer}
+.answer.ok{background:#e8fffb;border:2px solid var(--ok)}
+.answer.bad{background:#fff1f1;border:2px solid var(--bad)}
+.hint{opacity:.8}
+.footer{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:10px}
+
+/* =========================
+   FIREWORKS (CSS + CANVAS)
+========================= */
+#fx{position:fixed;inset:0;pointer-events:none}
+.star{position:absolute;width:8px;height:8px;background:gold;border-radius:50%;animation:fly 1s ease-out forwards}
+@keyframes fly{to{transform:translate(var(--x),var(--y)) scale(0);opacity:0}}
+
+/* =========================
+   MOBILE
+========================= */
+@media(max-width:600px){
+  .big{font-size:24px}
+  .btn{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<canvas id="fx"></canvas>
+
+<script>
+/* ======================================================
+   GAME_DATA – TẠO 100 GAME × 5 LEVEL (SINH TỰ ĐỘNG)
+====================================================== */
+const PRAISE = ["Giỏi lắm!","Con làm rất tốt!","Tuyệt vời!","Xuất sắc!","Cố gắng nữa nhé!"];
+const GAME_TYPES = [
+  "Đếm số","So sánh số","Sắp xếp số","Cộng","Trừ",
+  "Dãy số","Toán hình ảnh","Chọn đáp án đúng","Chọn đáp án sai","Thử thách"
+];
+
+function rand(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+/* Sinh cấu hình 100 game */
+const GAMES = Array.from({length:100},(_,i)=>{
+  const type = GAME_TYPES[i%GAME_TYPES.length];
+  return {
+    id:i+1,
+    title:`Game ${i+1}: ${type}`,
+    type,
+    levels:Array.from({length:5},(_,lv)=>({level:lv+1}))
+  }
+});
+
+/* ======================================================
+   GAME_STATE
+====================================================== */
+const state={
+  screen:"menu", // menu | play | celebrate
+  game:null, levelIndex:0,
+  sound:true
+};
+
+/* ======================================================
+   AUDIO (WEB AUDIO – KHÔNG FILE NGOÀI)
+====================================================== */
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq=440,dur=0.12){
+  if(!state.sound) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.frequency.value=freq; o.type="sine";
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.start(); o.stop(audioCtx.currentTime+dur);
+}
+function cheer(){beep(660,.15);setTimeout(()=>beep(880,.15),160)}
+
+/* ======================================================
+   GAME_LOGIC – TẠO CÂU HỎI THEO LOẠI & ĐỘ KHÓ
+====================================================== */
+function makeQuestion(game,level){
+  const diff = level; // 1→5
+  let q={}, a=[], correct=null;
+
+  switch(game.type){
+    case "Đếm số":{
+      const n = rand(1,5+diff*2);
+      q.text = `Có bao nhiêu chấm?`;
+      q.visual = "● ".repeat(n);
+      a = shuffle([n, n+1, Math.max(0,n-1)]);
+      correct = n; break;
+    }
+    case "So sánh số":{
+      const x=rand(1,10+diff*5), y=rand(1,10+diff*5);
+      q.text = `Số nào lớn hơn?`;
+      q.visual = `${x}  vs  ${y}`;
+      a = shuffle([x,y]); correct = Math.max(x,y); break;
+    }
+    case "Sắp xếp số":{
+      const arr = shuffle([rand(1,20),rand(1,20),rand(1,20)]);
+      q.text = `Sắp xếp tăng dần`;
+      q.visual = arr.join(", ");
+      a = [arr.slice().sort((a,b)=>a-b).join(", ")];
+      correct = a[0]; break;
+    }
+    case "Cộng":{
+      const x=rand(1,5+diff*3), y=rand(1,5+diff*3);
+      q.text = `${x} + ${y} = ?`;
+      const s=x+y; a=shuffle([s,s+1,Math.max(0,s-1)]); correct=s; break;
+    }
+    case "Trừ":{
+      const x=rand(3,8+diff*3), y=rand(1,Math.min(5+diff,x));
+      q.text = `${x} - ${y} = ?`;
+      const s=x-y; a=shuffle([s,s+1,Math.max(0,s-1)]); correct=s; break;
+    }
+    case "Dãy số":{
+      const start=rand(1,10), step=rand(1,3+diff);
+      q.text = `Điền số tiếp theo`;
+      q.visual = `${start}, ${start+step}, ${start+2*step}, ?`;
+      correct = start+3*step; a=shuffle([correct,correct+step,correct-step]); break;
+    }
+    case "Toán hình ảnh":{
+      const n=rand(1,4+diff);
+      q.text = `Đếm hình`;
+      q.visual = "🍎 ".repeat(n);
+      a=shuffle([n,n+1,Math.max(0,n-1)]); correct=n; break;
+    }
+    case "Chọn đáp án đúng":{
+      const x=rand(1,9), y=rand(1,9);
+      q.text = `Chọn kết quả đúng: ${x}+${y}`;
+      correct=x+y; a=shuffle([correct,correct+2,Math.max(0,correct-2)]); break;
+    }
+    case "Chọn đáp án sai":{
+      const x=rand(2,10), y=rand(1,5);
+      q.text = `Chọn kết quả SAI của ${x}-${y}`;
+      const right=x-y;
+      a=shuffle([right,right+1,Math.max(0,right-1)]);
+      correct = a.find(v=>v!==right); break;
+    }
+    default:{
+      const x=rand(1,10), y=rand(1,10);
+      q.text=`Thử thách: ${x} + ${y}`;
+      correct=x+y; a=shuffle([correct,correct+1,Math.max(0,correct-1)]);
+    }
+  }
+  return {q,a,correct};
+}
+
+/* ======================================================
+   UI_RENDER
+====================================================== */
+const app=document.getElementById("app");
+const fx=document.getElementById("fx");
+const fxc=fx.getContext("2d");
+function render(){
+  app.innerHTML="";
+  if(state.screen==="menu") renderMenu();
+  if(state.screen==="play") renderPlay();
+  if(state.screen==="celebrate") renderCelebrate();
+}
+function renderMenu(){
+  const c=document.createElement("div"); c.className="card";
+  c.innerHTML=`<h1 class="center">🎮 100 Game Toán Học</h1>
+  <p class="center hint">Chọn một game để chơi</p>
+  <div class="grid">
+    ${GAMES.map(g=>`<div class="game-tile" data-id="${g.id}">
+      <b>${g.id}</b><br/><small>${g.type}</small>
+    </div>`).join("")}
+  </div>
+  <div class="footer">
+    <button class="btn secondary" id="sound">${state.sound?"🔊":"🔇"} Âm thanh</button>
+  </div>`;
+  c.querySelectorAll(".game-tile").forEach(t=>t.onclick=()=>{
+    const id=+t.dataset.id;
+    state.game=GAMES[id-1]; state.levelIndex=0; state.screen="play"; render();
+  });
+  c.querySelector("#sound").onclick=()=>{state.sound=!state.sound; render()};
+  app.appendChild(c);
+}
+function renderPlay(){
+  const c=document.createElement("div"); c.className="card";
+  const lvl=state.levelIndex+1;
+  const data=makeQuestion(state.game,lvl);
+  c.innerHTML=`<h2>${state.game.title}</h2>
+  <p>Level ${lvl}/5</p>
+  <div class="center big">${data.q.text}</div>
+  <div class="center big">${data.q.visual||""}</div>
+  <div class="row">
+    ${data.a.map(v=>`<div class="answer">${v}</div>`).join("")}
+  </div>
+  <div class="footer">
+    <button class="btn secondary" id="back">⬅ Menu</button>
+    <span class="hint">Chọn đáp án</span>
+  </div>`;
+  c.querySelectorAll(".answer").forEach(el=>{
+    el.onclick=()=>{
+      if(el.textContent==data.correct){
+        el.classList.add("ok"); beep(700); setTimeout(()=>{
+          if(state.levelIndex<4){state.levelIndex++; renderCelebrate()}
+          else{renderCelebrate(true)}
+        },300);
+      }else{
+        el.classList.add("bad"); beep(200);
+      }
+    }
+  });
+  c.querySelector("#back").onclick=()=>{state.screen="menu"; render()}
+  app.appendChild(c);
+}
+function renderCelebrate(final=false){
+  state.screen="celebrate";
+  fireworks(); cheer();
+  const c=document.createElement("div"); c.className="card center";
+  c.innerHTML=`<h2>🎉 ${PRAISE[rand(0,PRAISE.length-1)]}</h2>
+  <p>${final?"Hoàn thành game!":"Qua màn!"}</p>
+  <div class="row">
+    <button class="btn" id="next">${final?"Về Menu":"Level tiếp"}</button>
+  </div>`;
+  c.querySelector("#next").onclick=()=>{
+    if(final){state.screen="menu"}
+    else{state.screen="play"}
+    render();
+  }
+  app.appendChild(c);
+}
+
+/* ======================================================
+   EFFECTS – PHÁO HOA & SAO
+====================================================== */
+function fireworks(){
+  fx.width=innerWidth; fx.height=innerHeight;
+  const t=Date.now();
+  const iv=setInterval(()=>{
+    fxc.clearRect(0,0,fx.width,fx.height);
+    for(let i=0;i<30;i++){
+      fxc.fillStyle=`hsl(${rand(0,360)},80%,60%)`;
+      fxc.beginPath();
+      fxc.arc(rand(0,fx.width),rand(0,fx.height),rand(1,3),0,Math.PI*2);
+      fxc.fill();
+    }
+    if(Date.now()-t>700){clearInterval(iv); fxc.clearRect(0,0,fx.width,fx.height)}
+  },50);
+  for(let i=0;i<20;i++){
+    const s=document.createElement("div"); s.className="star";
+    s.style.left=rand(0,innerWidth)+"px"; s.style.top=rand(0,innerHeight)+"px";
+    s.style.setProperty("--x",rand(-120,120)+"px");
+    s.style.setProperty("--y",rand(-120,120)+"px");
+    document.body.appendChild(s); setTimeout(()=>s.remove(),1000);
+  }
+}
+
+/* INIT */
+render();
+</script>
+</body>
+</html>
