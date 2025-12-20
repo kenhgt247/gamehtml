@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kids Find Differences - 10 Worlds</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #E0F7FA;
+            --primary: #FF9800;
+            --secondary: #4DD0E1;
+            --accent: #E91E63;
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            font-family: var(--font-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #37474F;
+        }
+
+        /* --- UI LAYERS --- */
+        #game-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.98);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            pointer-events: auto;
+            transition: opacity 0.3s;
+            z-index: 20;
+        }
+        .hidden { opacity: 0; pointer-events: none; z-index: -1; }
+
+        /* --- TYPOGRAPHY & BUTTONS --- */
+        h1 { font-size: 2.5rem; color: var(--primary); text-shadow: 2px 2px #FFF; margin: 0 0 10px; text-align: center; }
+        h2 { color: var(--secondary); margin: 5px; }
+        p { font-size: 1.2rem; text-align: center; max-width: 80%; }
+
+        .btn {
+            background: #FFEB3B; border: 4px solid #FBC02D; border-radius: 50px;
+            padding: 12px 30px; font-size: 1.3rem; font-weight: bold; color: #5D4037;
+            cursor: pointer; margin: 10px; box-shadow: 0 5px 0 #F9A825;
+            transition: transform 0.1s; font-family: var(--font-main);
+        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #F9A825; }
+        .btn-icon { width: 45px; height: 45px; padding: 0; border-radius: 50%; font-size: 1.5rem; display: flex; justify-content: center; align-items: center; }
+        .btn-green { background: #69F0AE; border-color: #00E676; box-shadow: 0 5px 0 #00C853; color: #1B5E20; }
+
+        /* --- HUD --- */
+        #hud {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 15px; background: #FFF; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            pointer-events: auto; height: 60px; z-index: 5;
+        }
+        .stat-group { display: flex; gap: 15px; align-items: center; font-weight: bold; font-size: 1.2rem; }
+        .hearts { color: #FF5252; letter-spacing: 2px; }
+        
+        /* --- GAME AREA --- */
+        #canvas-container {
+            flex: 1; position: relative;
+            display: flex; justify-content: center; align-items: center;
+            padding: 10px; gap: 10px;
+        }
+        .canvas-wrapper {
+            position: relative;
+            border: 4px solid #FFF; border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            overflow: hidden; background: #EEE;
+            cursor: crosshair; touch-action: none;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* --- MARKERS & ANIMATIONS --- */
+        .marker {
+            position: absolute; border: 3px solid #00E676; border-radius: 50%;
+            box-shadow: 0 0 10px #00E676, inset 0 0 10px #00E676;
+            transform: translate(-50%, -50%); pointer-events: none;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        .hint-marker {
+            position: absolute; border: 3px dashed #FFD700; background: rgba(255, 215, 0, 0.3);
+            border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+            animation: pulseHint 1.2s infinite; z-index: 100;
+        }
+
+        .hand-pointer {
+            position: absolute; font-size: 2rem;
+            animation: pointAt 1.2s infinite; pointer-events: none; z-index: 101;
+        }
+
+        @keyframes popIn { from { width:0; height:0; opacity:0; } to { width:var(--size); height:var(--size); opacity:1; } }
+        @keyframes pulseHint { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } }
+        @keyframes pointAt { 0%, 100% { transform: translate(10px, 10px); } 50% { transform: translate(0, 0); } }
+        
+        .shake { animation: shake 0.5s; }
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+
+        /* --- MODAL --- */
+        .modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #FFF; padding: 20px; border-radius: 20px; border: 5px solid #4DD0E1;
+            width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            z-index: 50; display: none;
+        }
+        .modal.open { display: block; animation: popInModal 0.3s; }
+        @keyframes popInModal { from {transform: translate(-50%, -60%); opacity:0;} to {transform: translate(-50%, -50%); opacity:1;} }
+        .overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:40; display:none; }
+        .overlay.open { display: block; }
+
+        /* Responsive */
+        @media (orientation: portrait) {
+            #canvas-container { flex-direction: column; }
+            .canvas-wrapper { width: 90vw; height: 35vh; }
+            h1 { font-size: 1.8rem; }
+        }
+        @media (orientation: landscape) {
+            .canvas-wrapper { width: 45vw; height: 33.75vw; max-height: 75vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud" class="hidden">
+        <div class="stat-group">
+            <button class="btn btn-icon" onclick="game.showHome()">🏠</button>
+            <button class="btn btn-icon" onclick="game.openHowTo()">❓</button>
+        </div>
+        <div class="stat-group">
+            <span>Level <span id="lvl-txt">1</span></span>
+            <span id="hearts-txt" class="hearts">❤️❤️❤️</span>
+        </div>
+        <div class="stat-group">
+            <button class="btn btn-icon btn-green" id="btn-hint" onclick="game.useHint()">💡</button>
+            <span style="font-size:0.9rem" id="hint-txt">3/3</span>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <div class="canvas-wrapper" id="wrap-left">
+            <canvas id="cvs-left"></canvas>
+        </div>
+        <div class="canvas-wrapper" id="wrap-right">
+            <canvas id="cvs-right"></canvas>
+        </div>
+    </div>
+
+    <div id="game-ui">
+        <div id="start-screen" class="screen">
+            <h1>Find the Differences</h1>
+            <h2>Kids Edition 🎨</h2>
+            <p>Explore 10 different worlds!</p>
+            <br>
+            <button class="btn" onclick="game.startGame()">PLAY GAME ▶</button>
+            <button class="btn" onclick="game.openHowTo()">How to Play ?</button>
+        </div>
+
+        <div id="win-screen" class="screen hidden">
+            <h1 style="color:#00E676">AWESOME! 🎉</h1>
+            <p id="praise-txt">You found them all!</p>
+            <button class="btn" onclick="game.nextLevel()">Next Level ➡</button>
+        </div>
+
+        <div id="lose-screen" class="screen hidden">
+            <h1 style="color:#FF5252">Oh No! 💔</h1>
+            <p>Out of hearts...</p>
+            <button class="btn" onclick="game.retryLevel()">Try Again ↺</button>
+            <button class="btn" onclick="game.showHome()">Home 🏠</button>
+        </div>
+        
+        <div id="victory-screen" class="screen hidden">
+            <h1>CHAMPION! 🏆</h1>
+            <p>You finished all 10 levels!</p>
+            <button class="btn" onclick="game.showHome()">Play Again ↺</button>
+        </div>
+    </div>
+
+    <div id="overlay" class="overlay"></div>
+    <div id="modal-howto" class="modal">
+        <h2 style="color:var(--primary)">How to Play</h2>
+        <ul style="text-align:left; font-size:1.2rem; line-height:1.6;">
+            <li>👆 <strong>Tap</strong> on the differences.</li>
+            <li>❤️ You have <strong>3 Hearts</strong>.</li>
+            <li>💡 Need help? Use the <strong>Hint</strong> button.</li>
+            <li>🎉 Find all to win!</li>
+        </ul>
+        <button class="btn" onclick="game.closeHowTo()">Got it!</button>
+    </div>
+
+    <script>
+        /**
+         * --- AUDIO MANAGER ---
+         */
+        const AudioSys = {
+            ctx: null,
+            init: function() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            play: function(type) {
+                if (!this.ctx) this.init();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain); gain.connect(this.ctx.destination);
+
+                const now = this.ctx.currentTime;
+                if (type === 'ding') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                    gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5); osc.start(now); osc.stop(now + 0.5);
+                } else if (type === 'oops') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+                    gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3);
+                } else if (type === 'win') {
+                    [500, 600, 800, 1000].forEach((f, i) => {
+                        const o = this.ctx.createOscillator(); const g = this.ctx.createGain(); o.connect(g); g.connect(this.ctx.destination);
+                        o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.1, now + i*0.1); g.gain.linearRampToValueAtTime(0, now + i*0.1 + 0.2);
+                        o.start(now + i*0.1); o.stop(now + i*0.1 + 0.2);
+                    });
+                }
+            }
+        };
+
+        /**
+         * --- DRAWING ENGINE (ART) ---
+         */
+        const Art = {
+            ctx: null, seed: 0,
+            rand: function() { const x = Math.sin(this.seed++) * 10000; return x - Math.floor(x); },
+            circle: function(x, y, r, c) { this.ctx.fillStyle=c; this.ctx.beginPath(); this.ctx.arc(x,y,r,0,Math.PI*2); this.ctx.fill(); },
+            rect: function(x, y, w, h, c) { this.ctx.fillStyle=c; this.ctx.fillRect(x,y,w,h); },
+            triangle: function(x, y, w, h, c) { this.ctx.fillStyle=c; this.ctx.beginPath(); this.ctx.moveTo(x, y-h/2); this.ctx.lineTo(x+w/2, y+h/2); this.ctx.lineTo(x-w/2, y+h/2); this.ctx.fill(); },
+            
+            drawCloud: function(x, y, s, c="#FFF") { this.circle(x, y, 30*s, c); this.circle(x+20*s, y-10*s, 35*s, c); this.circle(x+40*s, y, 30*s, c); },
+            drawTree: function(x, y, s, type=0) {
+                this.rect(x-10*s, y, 20*s, 60*s, "#795548");
+                const c = type===0 ? "#4CAF50" : (type===1 ? "#2E7D32" : "#8BC34A");
+                if (type===2) { this.triangle(x, y-10*s, 60*s, 80*s, c); this.triangle(x, y-40*s, 50*s, 70*s, c); } else { this.circle(x, y-20*s, 40*s, c); }
+            },
+            drawBuilding: function(x, y, s, c) {
+                this.rect(x-25*s, y-80*s, 50*s, 80*s, c); this.ctx.fillStyle="#FFEB3B";
+                for(let i=0; i<3; i++) for(let j=0; j<2; j++) this.ctx.fillRect(x-15*s + j*20*s, y-70*s + i*20*s, 10*s, 10*s);
+            },
+            drawFish: function(x, y, s, c) { this.circle(x, y, 15*s, c); this.triangle(x-20*s, y, 15*s, 15*s, c); this.circle(x+5*s, y-2*s, 2*s, "black"); },
+            drawPlanet: function(x, y, s, c) { this.circle(x, y, 20*s, c); this.ctx.strokeStyle="rgba(255,255,255,0.5)"; this.ctx.lineWidth=2*s; this.ctx.beginPath(); this.ctx.ellipse(x, y, 30*s, 10*s, -0.2, 0, Math.PI*2); this.ctx.stroke(); },
+            drawFlower: function(x, y, s, c) { this.rect(x-1*s, y, 2*s, 20*s, "green"); for(let i=0; i<5; i++) { let a = (i*72)*Math.PI/180; this.circle(x+Math.cos(a)*8*s, y-5*s+Math.sin(a)*8*s, 5*s, c); } this.circle(x, y-5*s, 4*s, "yellow"); },
+
+            // --- MAIN SCENE RENDERER (Corrected Logic) ---
+            drawScene: function(canvas, data, isRight, diffs, returnItemsOnly=false) {
+                let w, h;
+                if(!returnItemsOnly) {
+                    this.ctx = canvas.getContext('2d'); w = canvas.width; h = canvas.height;
+                    this.rect(0, 0, w, h, data.bg[0]); if(data.bg[1]) this.rect(0, h*0.6, w, h*0.4, data.bg[1]);
+                }
+
+                // FIX: Reset seed HERE to ensure generation is identical every time
+                this.seed = data.seed; 
+
+                const items = [];
+                for(let i=0; i<data.count; i++) {
+                    const s = 0.5 + this.rand() * 0.8;
+                    items.push({
+                        type: data.items[Math.floor(this.rand() * data.items.length)],
+                        x: 0.1 + this.rand() * 0.8,
+                        y: 0.2 + this.rand() * 0.7,
+                        scale: s,
+                        color: data.colors[Math.floor(this.rand() * data.colors.length)],
+                        r: s * 0.05 // Store rough radius for hitbox
+                    });
+                }
+                items.sort((a,b) => a.y - b.y);
+
+                if(returnItemsOnly) return items; // EXIT if just needing data
+
+                // Draw Items
+                items.forEach((item, idx) => {
+                    let draw = true; let ix = item.x * w; let iy = item.y * h; let is = item.scale * (w/1000); let ic = item.color;
+                    if (isRight) {
+                        const d = diffs.find(d => d.idx === idx);
+                        if (d) {
+                            if (d.type === 'missing') draw = false;
+                            else if (d.type === 'color') ic = d.altColor;
+                            else if (d.type === 'move') ix += (d.offset * w);
+                        }
+                    }
+                    if (draw) {
+                        if (item.type === 'cloud') this.drawCloud(ix, iy*0.5, is);
+                        else if (item.type === 'tree') this.drawTree(ix, iy, is, Math.floor(this.rand()*3));
+                        else if (item.type === 'build') this.drawBuilding(ix, iy, is, ic);
+                        else if (item.type === 'fish') this.drawFish(ix, iy, is, ic);
+                        else if (item.type === 'planet') this.drawPlanet(ix, iy, is, ic);
+                        else if (item.type === 'flower') this.drawFlower(ix, iy, is, ic);
+                        else if (item.type === 'ball') this.circle(ix, iy, 15*is, ic);
+                        else if (item.type === 'rect') this.rect(ix-15*is, iy-15*is, 30*is, 30*is, ic);
+                    }
+                });
+            }
+        };
+
+        const LEVELS = [
+            { id: 1, name: "Sunny Park", bg: ["#81D4FA", "#C8E6C9"], items: ["tree", "cloud", "flower"], colors: ["#FF5722", "#FFEB3B", "#E91E63"], count: 12, diff: 3 },
+            { id: 2, name: "Blue Ocean", bg: ["#B3E5FC", "#0288D1"], items: ["fish", "cloud"], colors: ["#FF9800", "#FF5252", "#E040FB"], count: 15, diff: 3 },
+            { id: 3, name: "Outer Space", bg: ["#1A237E", null], items: ["planet", "ball"], colors: ["#00BCD4", "#E040FB", "#FF5722"], count: 12, diff: 4 },
+            { id: 4, name: "Green Farm", bg: ["#FFF9C4", "#AED581"], items: ["tree", "flower", "rect"], colors: ["#795548", "#F44336", "#FF9800"], count: 16, diff: 4 },
+            { id: 5, name: "Busy City", bg: ["#E1F5FE", "#BDBDBD"], items: ["build", "cloud", "tree"], colors: ["#607D8B", "#795548", "#546E7A"], count: 18, diff: 5 },
+            { id: 6, name: "Snowy Land", bg: ["#E0F7FA", "#FAFAFA"], items: ["tree", "rect"], colors: ["#00BCD4", "#009688", "#3F51B5"], count: 15, diff: 5 },
+            { id: 7, name: "Red Desert", bg: ["#FFCCBC", "#D84315"], items: ["rect", "ball", "cloud"], colors: ["#5D4037", "#8D6E63", "#FFAB91"], count: 14, diff: 5 },
+            { id: 8, name: "Deep Sea", bg: ["#006064", "#004D40"], items: ["fish", "ball"], colors: ["#1DE9B6", "#FFEB3B", "#FF4081"], count: 20, diff: 6 },
+            { id: 9, name: "Magic Forest", bg: ["#33691E", "#1B5E20"], items: ["tree", "flower", "ball"], colors: ["#EA80FC", "#B388FF", "#FF80AB"], count: 22, diff: 6 },
+            { id: 10, name: "Candy Land", bg: ["#F8BBD0", "#F48FB1"], items: ["ball", "rect", "flower"], colors: ["#D500F9", "#FF1744", "#651FFF"], count: 25, diff: 6 }
+        ];
+
+        class Game {
+            constructor() {
+                this.curLevelIdx = 0; this.hearts = 3; this.hints = 3; this.diffs = []; this.foundCount = 0;
+                this.c1 = document.getElementById('cvs-left'); this.c2 = document.getElementById('cvs-right');
+                this.handleResize = this.handleResize.bind(this); window.addEventListener('resize', this.handleResize);
+                ['mousedown', 'touchstart'].forEach(evt => {
+                    this.c1.addEventListener(evt, e => this.handleClick(e, false), {passive: false});
+                    this.c2.addEventListener(evt, e => this.handleClick(e, true), {passive: false});
+                });
+            }
+
+            startGame() { this.curLevelIdx = 0; this.loadLevel(0); this.showScreen(null); document.getElementById('hud').classList.remove('hidden'); }
+
+            loadLevel(idx) {
+                this.curLevelIdx = idx; const data = LEVELS[idx];
+                this.hearts = 3; this.hints = 3; this.foundCount = 0;
+                data.seed = data.id * 1000; // Ensure seed is set
+
+                // FIX: Get canonical item list from Art engine directly
+                Art.seed = data.seed; // Reset seed for shuffling
+                const items = Art.drawScene(null, data, false, [], true);
+
+                // Shuffle indices
+                const indices = Array.from({length: items.length}, (_, i) => i);
+                for (let i = indices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Art.rand() * (i + 1));
+                    [indices[i], indices[j]] = [indices[j], indices[i]];
+                }
+                
+                this.diffs = [];
+                for(let i=0; i<data.diff; i++) {
+                    const tIdx = indices[i];
+                    const item = items[tIdx]; // Use real item data
+                    const types = ['missing', 'color', 'move'];
+                    const type = types[Math.floor(Art.rand() * 3)];
+                    // Find an alternate color
+                    let altCol = data.colors[0];
+                    for(let c of data.colors) { if(c !== item.color) { altCol = c; break; }}
+
+                    this.diffs.push({
+                        idx: tIdx, type: type, x: item.x, y: item.y, r: item.r * 1.5,
+                        offset: (type === 'move' ? (Art.rand()>0.5 ? 0.05 : -0.05) : 0),
+                        altColor: altCol, found: false
+                    });
+                }
+
+                this.updateHUD(); this.render();
+                document.querySelectorAll('.marker, .hint-marker, .hand-pointer').forEach(el => el.remove());
+            }
+
+            render() {
+                this.handleResize(); const data = LEVELS[this.curLevelIdx];
+                Art.drawScene(this.c1, data, false, []);
+                Art.drawScene(this.c2, data, true, this.diffs);
+            }
+
+            handleResize() {
+                [this.c1, this.c2].forEach(c => { const wrapper = c.parentElement; c.width = wrapper.clientWidth; c.height = wrapper.clientHeight; });
+                if(this.curLevelIdx !== null && LEVELS[this.curLevelIdx]) {
+                    const data = LEVELS[this.curLevelIdx];
+                    Art.drawScene(this.c1, data, false, []);
+                    Art.drawScene(this.c2, data, true, this.diffs);
+                }
+            }
+
+            handleClick(e, isRight) {
+                e.preventDefault(); if(document.querySelector('.screen:not(.hidden)')) return;
+                const rect = e.target.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const xPct = (clientX - rect.left) / rect.width;
+                const yPct = (clientY - rect.top) / rect.height;
+                this.checkHit(xPct, yPct, isRight);
+            }
+
+            checkHit(x, y, isRight) {
+                let hit = null;
+                for(let d of this.diffs) {
+                    if(d.found) continue;
+                    let targetX = d.x; let targetY = d.y;
+                    if(isRight && d.type === 'move') targetX += d.offset;
+                    const dist = Math.sqrt(Math.pow(x - targetX, 2) + Math.pow(y - targetY, 2));
+                    if(dist < (d.r + 0.05)) { hit = d; break; }
+                }
+                if(hit) this.onCorrect(hit); else this.onWrong(isRight);
+            }
+
+            onCorrect(d) {
+                d.found = true; this.foundCount++; AudioSys.play('ding');
+                this.addMarker(this.c1, d.x, d.y);
+                let rx = d.x; if(d.type === 'move') rx += d.offset;
+                this.addMarker(this.c2, rx, d.y);
+                if(this.foundCount >= this.diffs.length) {
+                    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                    AudioSys.play('win'); setTimeout(() => this.showScreen('win-screen'), 1000);
+                }
+            }
+
+            onWrong(isRight) {
+                AudioSys.play('oops'); this.hearts--; this.updateHUD();
+                const wrapper = isRight ? document.getElementById('wrap-right') : document.getElementById('wrap-left');
+                wrapper.classList.add('shake'); setTimeout(() => wrapper.classList.remove('shake'), 500);
+                if(this.hearts <= 0) setTimeout(() => this.showScreen('lose-screen'), 500);
+            }
+
+            useHint() {
+                if(this.hints <= 0 || this.foundCount >= this.diffs.length) return;
+                const target = this.diffs.find(d => !d.found); if(!target) return;
+                this.hints--; this.updateHUD();
+                const m = document.createElement('div'); m.className = 'hint-marker';
+                m.style.left = (target.x * 100) + '%'; m.style.top = (target.y * 100) + '%';
+                m.style.width = '15%'; m.style.height = '0'; m.style.paddingBottom = '15%';
+                const hand = document.createElement('div'); hand.className = 'hand-pointer';
+                hand.innerHTML = '👆'; hand.style.left = (target.x * 100) + '%'; hand.style.top = (target.y * 100) + '%';
+                const wrap = document.getElementById('wrap-left'); wrap.appendChild(m); wrap.appendChild(hand);
+                setTimeout(() => { m.remove(); hand.remove(); }, 1200);
+            }
+
+            updateHUD() {
+                document.getElementById('lvl-txt').innerText = this.curLevelIdx + 1;
+                let hStr = ""; for(let i=0; i<3; i++) hStr += (i<this.hearts ? "❤️" : "🖤");
+                document.getElementById('hearts-txt').innerText = hStr;
+                document.getElementById('hint-txt').innerText = `${this.hints}/3`;
+                const hb = document.getElementById('btn-hint');
+                if(this.hints === 0) { hb.style.opacity = 0.5; hb.style.filter = 'grayscale(1)'; } else { hb.style.opacity = 1; hb.style.filter = 'none'; }
+            }
+
+            addMarker(canvas, x, y) {
+                const m = document.createElement('div'); m.className = 'marker';
+                m.style.left = (x * 100) + '%'; m.style.top = (y * 100) + '%'; m.style.setProperty('--size', '12%');
+                canvas.parentElement.appendChild(m);
+            }
+
+            showScreen(id) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                if(id) document.getElementById(id).classList.remove('hidden');
+                if(id === 'start-screen' || id === 'victory-screen') document.getElementById('hud').classList.add('hidden');
+                else if (!id) document.getElementById('hud').classList.remove('hidden');
+            }
+
+            nextLevel() { if(this.curLevelIdx >= LEVELS.length - 1) this.showScreen('victory-screen'); else { this.showScreen(null); this.loadLevel(this.curLevelIdx + 1); }}
+            retryLevel() { this.showScreen(null); this.loadLevel(this.curLevelIdx); }
+            showHome() { this.showScreen('start-screen'); }
+            openHowTo() { document.getElementById('modal-howto').classList.add('open'); document.getElementById('overlay').classList.add('open'); }
+            closeHowTo() { document.getElementById('modal-howto').classList.remove('open'); document.getElementById('overlay').classList.remove('open'); }
+        }
+
+        const game = new Game();
+        document.addEventListener('dblclick', function(event) { event.preventDefault(); }, { passive: false });
+    </script>
+</body>
+</html>
