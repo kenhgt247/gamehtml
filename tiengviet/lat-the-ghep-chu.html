@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lật Thẻ Ghép Chữ</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #FFF3E0;
+            --primary: #FF6F00;
+            --secondary: #009688;
+            --accent: #D84315;
+            --card-back: #4FC3F7;
+            --card-front: #FFFFFF;
+            --text-color: #37474F;
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg-color);
+            font-family: var(--font-main);
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI UTILS --- */
+        .hidden { display: none !important; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--bg-color); z-index: 10; padding: 15px;
+            transition: opacity 0.3s;
+        }
+
+        .btn {
+            background: var(--primary); color: white; border: none; border-radius: 50px;
+            padding: 12px 30px; font-size: 1.3rem; font-weight: bold;
+            box-shadow: 0 5px 0 #E65100; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-small { padding: 8px 16px; font-size: 1rem; box-shadow: 0 3px 0 #E65100; }
+        .btn-home { background: #546E7A; box-shadow: 0 5px 0 #37474F; }
+
+        /* --- HUD --- */
+        #hud {
+            height: 70px; width: 100%; background: #FFF;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); z-index: 5;
+        }
+        .stat-box { font-weight: bold; font-size: 1.1rem; display: flex; align-items: center; gap: 5px; }
+        .hearts { color: #F44336; letter-spacing: 2px; font-size: 1.4rem; }
+
+        /* --- GAME BOARD --- */
+        #game-board {
+            flex: 1; width: 100%; max-width: 800px; margin: 0 auto;
+            padding: 15px; display: flex; align-items: center; justify-content: center;
+        }
+
+        .grid {
+            display: grid; gap: 10px;
+            width: 100%; height: 100%;
+            /* Grid columns set by JS */
+        }
+
+        /* --- CARD STYLES (FLIP) --- */
+        .card {
+            background-color: transparent;
+            perspective: 1000px;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .card-inner {
+            position: relative; width: 100%; height: 100%;
+            text-align: center; transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 12px;
+        }
+
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+        .card.matched .card-inner { transform: rotateY(180deg); animation: pop 0.4s; }
+        .card.shake .card-inner { animation: shake 0.5s; border: 2px solid #F44336; }
+
+        .card-front, .card-back {
+            position: absolute; width: 100%; height: 100%;
+            -webkit-backface-visibility: hidden; backface-visibility: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 12px; font-weight: bold; border: 3px solid #FFF;
+        }
+
+        .card-back {
+            background: var(--card-back); color: white; font-size: 2rem;
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);
+        }
+        
+        .card-front {
+            background: var(--card-front); transform: rotateY(180deg);
+            color: var(--text-color);
+        }
+
+        .card-emoji { font-size: clamp(2rem, 5vw, 3.5rem); }
+        .card-text { font-size: clamp(1rem, 3vw, 1.5rem); margin-top: 5px; text-transform: uppercase; color: var(--accent); }
+
+        /* Animations */
+        @keyframes pop { 0% { transform: rotateY(180deg) scale(1); } 50% { transform: rotateY(180deg) scale(1.15); } 100% { transform: rotateY(180deg) scale(1); } }
+        @keyframes shake { 0%, 100% { transform: rotateY(180deg) translateX(0); } 25% { transform: rotateY(180deg) translateX(-5px); } 75% { transform: rotateY(180deg) translateX(5px); } }
+
+        /* Modal */
+        h1 { color: var(--primary); text-shadow: 2px 2px 0 #FFE0B2; margin-bottom: 20px; text-align: center; }
+        p { font-size: 1.2rem; text-align: center; margin-bottom: 30px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1>Lật Thẻ Ghép Chữ</h1>
+        <div style="font-size: 5rem; margin-bottom: 20px;">🎴🅰️🧩</div>
+        <p>Tìm cặp hình và chữ giống nhau nhé!</p>
+        <button class="btn" onclick="game.start()">CHƠI NGAY ▶</button>
+    </div>
+
+    <div id="game-ui" class="screen hidden" style="justify-content: flex-start; padding: 0;">
+        <div id="hud">
+            <div class="stat-box">
+                <button class="btn btn-small btn-home" onclick="game.goHome()">🏠</button>
+                <span>Cấp <span id="hud-level">1</span></span>
+            </div>
+            <div class="stat-box hearts" id="hearts-display">❤️❤️❤️</div>
+            <div class="stat-box">
+                <button class="btn btn-small" onclick="game.useHint()" id="btn-hint" style="background:#FFCA28; color:#333; box-shadow:0 3px 0 #FF8F00">💡 3</button>
+            </div>
+        </div>
+
+        <div id="game-board">
+            <div id="grid" class="grid"></div>
+        </div>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: #4CAF50">Giỏi Quá! 🎉</h1>
+        <div style="font-size: 4rem; margin: 20px;">⭐🏆⭐</div>
+        <p id="win-msg">Hoàn thành màn chơi!</p>
+        <button class="btn" onclick="game.nextLevel()">Màn Tiếp Theo ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+        <h1 style="color: #F44336">Cố Lên Nhé! 😢</h1>
+        <p>Hết tim rồi bé ơi!</p>
+        <button class="btn" onclick="game.retryLevel()">Thử Lại ↺</button>
+        <button class="btn btn-home" onclick="game.goHome()">Về Nhà</button>
+    </div>
+
+    <script>
+        // --- DATA ---
+        // Word matches Emoji directly. Type determines rendering (both have text & emoji, but logic checks 'id')
+        const VOCABULARY = [
+            { w: "CÁ", e: "🐟" }, { w: "CHÓ", e: "🐶" }, { w: "MÈO", e: "🐱" },
+            { w: "GÀ", e: "🐔" }, { w: "LỢN", e: "🐷" }, { w: "BÒ", e: "🐮" },
+            { w: "TÁO", e: "🍎" }, { w: "CAM", e: "🍊" }, { w: "NHO", e: "🍇" },
+            { w: "HOA", e: "🌸" }, { w: "CÂY", e: "🌳" }, { w: "SAO", e: "⭐" },
+            { w: "XE", e: "🚗" }, { w: "BÓNG", e: "⚽" }, { w: "SÁCH", e: "📖" },
+            { w: "BÉ", e: "👶" }, { w: "MẸ", e: "👩" }, { w: "BA", e: "👨" },
+            { w: "VỊT", e: "🦆" }, { w: "THỎ", e: "🐰" }, { w: "KHỈ", e: "🐵" },
+            { w: "CƠM", e: "🍚" }, { w: "SỮA", e: "🥛" }, { w: "BÁNH", e: "🍰" }
+        ];
+
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + duration);
+            },
+            ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.2), 100); },
+            oops: function() { this.playTone(150, 'sawtooth', 0.3); },
+            speak: function(text) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                // Attempt to find Vietnamese voice
+                const voices = window.speechSynthesis.getVoices();
+                const viVoice = voices.find(v => v.lang.includes('vi'));
+                if(viVoice) u.voice = viVoice;
+                u.lang = 'vi-VN'; u.rate = 0.9;
+                window.speechSynthesis.speak(u);
+            }
+        };
+
+        // --- GAME LOGIC ---
+        class Game {
+            constructor() {
+                this.level = 1;
+                this.hearts = 3;
+                this.hints = 3;
+                this.cards = [];
+                this.flippedCards = [];
+                this.matchedCount = 0;
+                this.pairsCount = 0;
+                this.lockBoard = false;
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                AudioSys.init();
+                // Preload voices
+                window.speechSynthesis.getVoices();
+                this.level = 1;
+                this.startLevel();
+            }
+
+            startLevel() {
+                this.hearts = 3;
+                this.hints = 3;
+                this.updateHUD();
+                
+                // Determine difficulty
+                // L1: 3 pairs, L2: 4 pairs, ... L10: 12 pairs
+                this.pairsCount = Math.min(12, 2 + this.level);
+                this.matchedCount = 0;
+                this.flippedCards = [];
+                this.lockBoard = false;
+
+                this.generateCards();
+            }
+
+            generateCards() {
+                const grid = document.getElementById('grid');
+                grid.innerHTML = '';
+
+                // Select vocabulary
+                const shuffledVocab = [...VOCABULARY].sort(() => 0.5 - Math.random());
+                const selectedPairs = shuffledVocab.slice(0, this.pairsCount);
+
+                let deck = [];
+                selectedPairs.forEach((item, index) => {
+                    // Card 1: Text
+                    deck.push({ id: index, type: 'text', content: item.w, matchId: index, pair: item });
+                    // Card 2: Emoji
+                    deck.push({ id: index, type: 'emoji', content: item.e, matchId: index, pair: item });
+                });
+
+                // Shuffle deck
+                deck.sort(() => 0.5 - Math.random());
+                this.cards = deck;
+
+                // Adjust Grid CSS
+                let cols = 3;
+                if (this.pairsCount >= 6) cols = 4;
+                if (this.pairsCount >= 10) cols = 5; // Mobile might need media query adjustment, but grid-template handles well
+                
+                // Improved Responsive Grid Logic
+                const totalCards = deck.length;
+                if (window.innerWidth < 600) {
+                    // Mobile
+                    grid.style.gridTemplateColumns = `repeat(${totalCards <= 12 ? 3 : 4}, 1fr)`;
+                } else {
+                    // Desktop
+                    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                }
+
+                deck.forEach((cardData, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.dataset.idx = idx;
+                    card.onclick = () => this.flipCard(card, cardData);
+
+                    const inner = document.createElement('div');
+                    inner.className = 'card-inner';
+
+                    const front = document.createElement('div');
+                    front.className = 'card-front';
+                    
+                    if(cardData.type === 'emoji') {
+                        front.innerHTML = `<div class="card-emoji">${cardData.content}</div>`;
+                    } else {
+                        front.innerHTML = `<div class="card-text">${cardData.content}</div>`;
+                    }
+
+                    const back = document.createElement('div');
+                    back.className = 'card-back';
+                    back.innerText = '?';
+
+                    inner.appendChild(front);
+                    inner.appendChild(back);
+                    card.appendChild(inner);
+                    grid.appendChild(card);
+                });
+            }
+
+            flipCard(cardEl, cardData) {
+                if (this.lockBoard) return;
+                if (cardEl === this.flippedCards[0]) return; // Click same card
+                if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+
+                cardEl.classList.add('flipped');
+                
+                // Add to flipped tracking
+                // Store element AND data
+                this.flippedCards.push({ el: cardEl, data: cardData });
+
+                if (this.flippedCards.length === 2) {
+                    this.checkForMatch();
+                }
+            }
+
+            checkForMatch() {
+                this.lockBoard = true;
+                const [c1, c2] = this.flippedCards;
+
+                const isMatch = c1.data.matchId === c2.data.matchId;
+
+                if (isMatch) {
+                    this.disableCards();
+                } else {
+                    this.unflipCards();
+                }
+            }
+
+            disableCards() {
+                const [c1, c2] = this.flippedCards;
+                c1.el.classList.add('matched');
+                c2.el.classList.add('matched');
+                
+                AudioSys.ding();
+                AudioSys.speak(c1.data.pair.w); // Read the word
+
+                this.matchedCount++;
+                this.flippedCards = [];
+                this.lockBoard = false;
+
+                if (this.matchedCount === this.pairsCount) {
+                    setTimeout(() => this.winLevel(), 1000);
+                }
+            }
+
+            unflipCards() {
+                AudioSys.oops();
+                const [c1, c2] = this.flippedCards;
+                
+                // Shake effect
+                c1.el.classList.add('shake');
+                c2.el.classList.add('shake');
+
+                this.hearts--;
+                this.updateHUD();
+
+                setTimeout(() => {
+                    c1.el.classList.remove('flipped', 'shake');
+                    c2.el.classList.remove('flipped', 'shake');
+                    this.flippedCards = [];
+                    this.lockBoard = false;
+                    
+                    if (this.hearts <= 0) {
+                        this.loseLevel();
+                    }
+                }, 1000);
+            }
+
+            useHint() {
+                if (this.hints <= 0 || this.lockBoard || this.flippedCards.length > 0) return;
+
+                // Find unmatched cards
+                const domCards = document.querySelectorAll('.card:not(.matched)');
+                if (domCards.length === 0) return;
+
+                this.hints--;
+                this.updateHUD();
+                this.lockBoard = true;
+
+                // Pick first available card
+                const firstCardEl = domCards[0];
+                const firstIdx = firstCardEl.dataset.idx;
+                const firstData = this.cards[firstIdx];
+
+                // Find its pair
+                let secondCardEl = null;
+                for(let i=0; i<domCards.length; i++) {
+                    const idx = domCards[i].dataset.idx;
+                    if(idx !== firstIdx && this.cards[idx].matchId === firstData.matchId) {
+                        secondCardEl = domCards[i];
+                        break;
+                    }
+                }
+
+                // Show them
+                firstCardEl.classList.add('flipped');
+                secondCardEl.classList.add('flipped');
+
+                setTimeout(() => {
+                    firstCardEl.classList.remove('flipped');
+                    secondCardEl.classList.remove('flipped');
+                    this.lockBoard = false;
+                }, 900);
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level;
+                let hStr = ""; for(let i=0; i<3; i++) hStr += i<this.hearts ? "❤️" : "🖤";
+                document.getElementById('hearts-display').innerText = hStr;
+                
+                const hb = document.getElementById('btn-hint');
+                hb.innerText = `💡 ${this.hints}`;
+                hb.style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            winLevel() {
+                document.getElementById('win-screen').classList.remove('hidden');
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            }
+
+            loseLevel() {
+                document.getElementById('lose-screen').classList.remove('hidden');
+            }
+
+            nextLevel() {
+                if(this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    this.startLevel();
+                } else {
+                    document.getElementById('win-msg').innerText = "Bé đã hoàn thành xuất sắc!";
+                    document.getElementById('win-screen').querySelector('button').style.display = 'none';
+                }
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.add('hidden');
+                this.startLevel();
+            }
+
+            goHome() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('game-ui').classList.add('hidden');
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>
