@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Find the Differences (Easy Kids)</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg: #E0F2F1;
+            --primary: #009688;
+            --accent: #FF5252;
+            --text: #37474F;
+            --font: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg);
+            font-family: var(--font);
+            color: var(--text);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI UTILS --- */
+        .hidden { display: none !important; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--bg); z-index: 20; padding: 20px;
+            transition: opacity 0.3s;
+        }
+
+        .btn {
+            background: #FFCA28; color: #5D4037; border: 4px solid #FF6F00;
+            border-radius: 50px; padding: 12px 35px; font-size: 1.3rem; font-weight: bold;
+            box-shadow: 0 6px 0 #E65100; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #E65100; }
+        .btn-icon { padding: 8px 15px; font-size: 1.1rem; border-width: 2px; box-shadow: 0 4px 0 #E65100; }
+        .btn-home { background: #B0BEC5; border-color: #607D8B; color: white; box-shadow: 0 4px 0 #455A64; }
+
+        /* --- HEADER --- */
+        #header {
+            width: 100%; padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            background: #FFF; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .stats { display: flex; gap: 15px; font-weight: bold; font-size: 1.2rem; align-items: center; }
+        .hearts { color: var(--accent); font-size: 1.5rem; letter-spacing: 2px; }
+
+        /* --- GAME AREA --- */
+        #game-area {
+            flex: 1; width: 100%; max-width: 1000px; margin: 0 auto;
+            display: flex; flex-direction: row; align-items: center; justify-content: center;
+            gap: 10px; padding: 10px; position: relative;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            border: 5px solid #FFF; border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            background: #FFF;
+            cursor: crosshair;
+            width: 48%; aspect-ratio: 4/3;
+            overflow: hidden;
+        }
+
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* Markers & Hints */
+        .marker {
+            position: absolute; border: 3px solid #00E676; border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+            box-shadow: 0 0 10px #00E676;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .hint-ring {
+            position: absolute; border: 4px dashed #FFD600; border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+            background: rgba(255, 214, 0, 0.2);
+            animation: pulseHint 1.2s infinite; z-index: 100;
+        }
+        .hint-arrow {
+            position: absolute; font-size: 3rem; pointer-events: none; z-index: 101;
+            filter: drop-shadow(0 2px 0 #FFF);
+            animation: pointAt 0.6s infinite alternate;
+        }
+
+        @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); } 100% { transform: translate(-50%, -50%) scale(1); } }
+        @keyframes pulseHint { 0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.9); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.9); } }
+        @keyframes pointAt { from { transform: translate(10px, 10px); } to { transform: translate(0, 0); } }
+        
+        .shake { animation: shake 0.5s; }
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 50;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #FFF; padding: 25px; border-radius: 20px;
+            max-width: 400px; width: 90%; text-align: center;
+            border: 5px solid var(--primary);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #game-area { flex-direction: column; }
+            .canvas-wrapper { width: 90%; aspect-ratio: auto; height: 35vh; }
+            h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1 style="font-size: 2.5rem; color: #009688;">Find the Differences</h1>
+        <div style="font-size: 5rem; margin: 20px;">🔎🎨</div>
+        <button class="btn" onclick="game.start()">PLAY ▶</button>
+        <button class="btn btn-home" onclick="game.openHowTo()">How to Play?</button>
+    </div>
+
+    <div id="game-ui" class="screen hidden" style="justify-content: flex-start; padding: 0;">
+        <div id="header">
+            <div class="stats">
+                <button class="btn btn-icon btn-home" onclick="game.goHome()">🏠</button>
+                <span>Lv.<span id="hud-level">1</span></span>
+            </div>
+            <div class="stats">
+                <span id="hud-hearts" class="hearts">❤️❤️❤️</span>
+            </div>
+            <div class="stats">
+                <span style="color:#009688">Score: <span id="hud-score">0</span></span>
+                <button class="btn btn-icon" id="btn-hint" onclick="game.useHint()" style="background:#FFD600; border-color:#FFA000">💡 3</button>
+            </div>
+        </div>
+
+        <div id="game-area">
+            <div class="canvas-wrapper" id="wrap-left">
+                <canvas id="c1"></canvas>
+            </div>
+            <div class="canvas-wrapper" id="wrap-right">
+                <canvas id="c2"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: #4CAF50">Awesome! 🎉</h1>
+        <h2 id="win-msg">Level Complete!</h2>
+        <div style="font-size: 4rem;">⭐</div>
+        <button class="btn" onclick="game.nextLevel()">Next Level ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+        <h1 style="color: #F44336">Oops! 💔</h1>
+        <p>You ran out of hearts.</p>
+        <button class="btn" onclick="game.retryLevel()">Try Again ↺</button>
+        <button class="btn btn-home" onclick="game.goHome()">Home</button>
+    </div>
+
+    <div id="modal-howto" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="color: var(--primary)">How to Play</h2>
+            <ul style="text-align: left; font-size: 1.1rem; line-height: 1.6;">
+                <li>👀 Look at the two pictures.</li>
+                <li>👆 Tap the difference.</li>
+                <li>❤️ Be careful, you have 3 hearts.</li>
+                <li>💡 Use Hint if you are stuck.</li>
+            </ul>
+            <button class="btn" onclick="document.getElementById('modal-howto').classList.add('hidden')">Got it!</button>
+        </div>
+    </div>
+
+    <script>
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + duration);
+            },
+            ding: function() { this.playTone(800, 'sine', 0.1); setTimeout(()=>this.playTone(1200, 'sine', 0.2), 100); },
+            oops: function() { this.playTone(150, 'sawtooth', 0.3); }
+        };
+
+        // --- ART ENGINE (Canvas Drawing) ---
+        const Art = {
+            ctx: null,
+            w: 0, h: 0,
+            
+            setCtx: function(canvas) {
+                this.ctx = canvas.getContext('2d');
+                this.w = canvas.width;
+                this.h = canvas.height;
+            },
+            
+            // Primitives
+            rect: function(x, y, w, h, c) { this.ctx.fillStyle=c; this.ctx.fillRect(this.w*x, this.h*y, this.w*w, this.h*h); },
+            circle: function(x, y, r, c) { this.ctx.fillStyle=c; this.ctx.beginPath(); this.ctx.arc(this.w*x, this.h*y, this.w*r, 0, Math.PI*2); this.ctx.fill(); },
+            tri: function(x1,y1, x2,y2, x3,y3, c) { 
+                this.ctx.fillStyle=c; this.ctx.beginPath(); 
+                this.ctx.moveTo(this.w*x1, this.h*y1); this.ctx.lineTo(this.w*x2, this.h*y2); this.ctx.lineTo(this.w*x3, this.h*y3); 
+                this.ctx.fill(); 
+            },
+
+            // Complex Objects
+            drawCloud: function(x, y, s) {
+                this.circle(x, y, 0.05*s, '#FFF');
+                this.circle(x+0.04*s, y-0.02*s, 0.06*s, '#FFF');
+                this.circle(x+0.08*s, y, 0.05*s, '#FFF');
+            },
+            drawTree: function(x, y, s) {
+                this.rect(x-0.02*s, y, 0.04*s, 0.15*s, '#795548'); // Trunk
+                this.circle(x, y-0.05*s, 0.08*s, '#4CAF50'); // Leaves
+            },
+            drawSun: function(x, y, s) {
+                this.circle(x, y, 0.08*s, '#FDD835');
+                // Rays could be added here
+            },
+            drawFish: function(x, y, s, color) {
+                this.circle(x, y, 0.04*s, color);
+                this.tri(x-0.04*s, y, x-0.06*s, y-0.03*s, x-0.06*s, y+0.03*s, color);
+            },
+            drawCar: function(x, y, s, c) {
+                this.rect(x-0.1*s, y-0.05*s, 0.2*s, 0.06*s, c); // Body
+                this.rect(x-0.06*s, y-0.09*s, 0.12*s, 0.04*s, '#81D4FA'); // Window
+                this.circle(x-0.06*s, y+0.01*s, 0.03*s, '#333'); // Wheel
+                this.circle(x+0.06*s, y+0.01*s, 0.03*s, '#333'); // Wheel
+            },
+            drawRocket: function(x, y, s) {
+                this.rect(x-0.03*s, y-0.05*s, 0.06*s, 0.1*s, '#E0E0E0');
+                this.tri(x-0.03*s, y-0.05*s, x+0.03*s, y-0.05*s, x, y-0.12*s, '#F44336'); // Nose
+                this.tri(x-0.03*s, y+0.05*s, x-0.06*s, y+0.08*s, x-0.03*s, y+0.02*s, '#546E7A'); // Fin
+                this.tri(x+0.03*s, y+0.05*s, x+0.06*s, y+0.08*s, x+0.03*s, y+0.02*s, '#546E7A'); // Fin
+            },
+            drawFlower: function(x, y, s) {
+                this.rect(x-0.005*s, y, 0.01*s, 0.1*s, 'green');
+                this.circle(x-0.02*s, y-0.02*s, 0.02*s, '#E91E63');
+                this.circle(x+0.02*s, y-0.02*s, 0.02*s, '#E91E63');
+                this.circle(x, y-0.04*s, 0.02*s, '#E91E63');
+                this.circle(x, y, 0.02*s, '#E91E63');
+                this.circle(x, y-0.02*s, 0.015*s, 'yellow');
+            },
+
+            // SCENE RENDERER
+            render: function(levelData, isRight, diffs) {
+                // Background
+                this.rect(0, 0, 1, 1, levelData.bg);
+                if(levelData.ground) this.rect(0, levelData.groundY, 1, 1-levelData.groundY, levelData.ground);
+
+                // Base Objects
+                levelData.objects.forEach((obj, idx) => {
+                    let draw = true;
+                    let props = {...obj}; // Copy props
+
+                    // Check differences
+                    if (isRight) {
+                        const d = diffs.find(d => d.id === idx);
+                        if (d) {
+                            if (d.type === 'missing') draw = false;
+                            else if (d.type === 'color') props.color = d.altColor;
+                            else if (d.type === 'move') {
+                                props.x += 0.15; // Shift right
+                            }
+                        }
+                    }
+
+                    if (draw) {
+                        switch(props.type) {
+                            case 'sun': this.drawSun(props.x, props.y, props.s); break;
+                            case 'cloud': this.drawCloud(props.x, props.y, props.s); break;
+                            case 'tree': this.drawTree(props.x, props.y, props.s); break;
+                            case 'fish': this.drawFish(props.x, props.y, props.s, props.color); break;
+                            case 'car': this.drawCar(props.x, props.y, props.s, props.color); break;
+                            case 'rocket': this.drawRocket(props.x, props.y, props.s); break;
+                            case 'flower': this.drawFlower(props.x, props.y, props.s); break;
+                            case 'ball': this.circle(props.x, props.y, props.s*0.05, props.color); break;
+                            case 'bird': 
+                                this.ctx.strokeStyle='#000'; this.ctx.lineWidth=2; this.ctx.beginPath();
+                                this.ctx.moveTo(this.w*(props.x-0.02), this.h*props.y);
+                                this.ctx.quadraticCurveTo(this.w*props.x, this.h*(props.y+0.02), this.w*(props.x+0.02), this.h*props.y);
+                                this.ctx.stroke();
+                                break;
+                        }
+                    }
+                });
+            }
+        };
+
+        // --- LEVEL DATA ---
+        // 10 distinct levels
+        const LEVELS = [
+            { // 1. Park
+                bg: '#81D4FA', ground: '#AED581', groundY: 0.6,
+                objects: [
+                    {type:'sun', x:0.1, y:0.15, s:1},
+                    {type:'tree', x:0.2, y:0.6, s:1}, {type:'tree', x:0.8, y:0.65, s:1.2},
+                    {type:'ball', x:0.5, y:0.8, s:1, color:'red'},
+                    {type:'cloud', x:0.4, y:0.2, s:1}, {type:'cloud', x:0.7, y:0.15, s:0.8}
+                ],
+                diffs: [{id:0, type:'missing'}, {id:3, type:'color', altColor:'blue'}, {id:5, type:'move'}]
+            },
+            { // 2. Ocean
+                bg: '#4FC3F7', ground: '#FFF176', groundY: 0.8,
+                objects: [
+                    {type:'fish', x:0.2, y:0.4, s:1, color:'orange'}, {type:'fish', x:0.6, y:0.3, s:1.2, color:'purple'},
+                    {type:'fish', x:0.8, y:0.6, s:0.8, color:'red'}, {type:'ball', x:0.2, y:0.1, s:0.5, color:'rgba(255,255,255,0.5)'}, // Bubble
+                    {type:'ball', x:0.25, y:0.15, s:0.3, color:'rgba(255,255,255,0.5)'}
+                ],
+                diffs: [{id:0, type:'move'}, {id:2, type:'missing'}, {id:4, type:'missing'}]
+            },
+            { // 3. Farm
+                bg: '#FFF9C4', ground: '#8D6E63', groundY: 0.5,
+                objects: [
+                    {type:'tree', x:0.15, y:0.5, s:1}, {type:'cloud', x:0.3, y:0.1, s:1},
+                    {type:'flower', x:0.3, y:0.7, s:1}, {type:'flower', x:0.4, y:0.8, s:1},
+                    {type:'bird', x:0.6, y:0.2, s:1}, {type:'ball', x:0.7, y:0.6, s:1, color:'pink'} // Pig abstract
+                ],
+                diffs: [{id:1, type:'missing'}, {id:3, type:'missing'}, {id:5, type:'color', altColor:'brown'}]
+            },
+            { // 4. Space
+                bg: '#1A237E', ground: null, groundY: 1,
+                objects: [
+                    {type:'rocket', x:0.5, y:0.5, s:1}, {type:'ball', x:0.2, y:0.2, s:1, color:'#FFEB3B'}, // Star
+                    {type:'ball', x:0.8, y:0.3, s:0.5, color:'#FFF'}, {type:'ball', x:0.1, y:0.8, s:1.5, color:'#4DD0E1'}, // Planet
+                    {type:'ball', x:0.9, y:0.9, s:0.8, color:'#FFEB3B'}
+                ],
+                diffs: [{id:0, type:'move'}, {id:2, type:'missing'}, {id:3, type:'color', altColor:'#EF5350'}, {id:4, type:'missing'}]
+            },
+            { // 5. City
+                bg: '#E1F5FE', ground: '#9E9E9E', groundY: 0.7,
+                objects: [
+                    {type:'car', x:0.3, y:0.75, s:1, color:'red'}, {type:'car', x:0.7, y:0.85, s:1, color:'blue'},
+                    {type:'sun', x:0.9, y:0.1, s:0.8}, {type:'cloud', x:0.2, y:0.15, s:1},
+                    {type:'ball', x:0.5, y:0.72, s:0.5, color:'green'} // Bush
+                ],
+                diffs: [{id:0, type:'color', altColor:'yellow'}, {id:3, type:'move'}, {id:4, type:'missing'}, {id:2, type:'missing'}]
+            },
+            // ... Simplified for brevity, logic scales to 10
+            { bg:'#F8BBD0', ground:'#FCE4EC', groundY:0.5, objects:[{type:'flower',x:0.2,y:0.7,s:1},{type:'flower',x:0.5,y:0.7,s:1.2},{type:'flower',x:0.8,y:0.7,s:1},{type:'cloud',x:0.5,y:0.2,s:1}], diffs:[{id:1,type:'color',altColor:'purple'},{id:3,type:'move'},{id:0,type:'missing'}] }, // 6. Garden
+            { bg:'#B2EBF2', ground:'#FFF', groundY:0.6, objects:[{type:'tree',x:0.2,y:0.6,s:1},{type:'ball',x:0.5,y:0.8,s:1.5,color:'#FFF'},{type:'ball',x:0.5,y:0.7,s:1,color:'#FFF'},{type:'ball',x:0.8,y:0.2,s:0.5,color:'#FFF'}], diffs:[{id:0,type:'missing'},{id:3,type:'move'},{id:2,type:'missing'}] }, // 7. Snow
+            { bg:'#263238', ground:'#37474F', groundY:0.6, objects:[{type:'ball',x:0.1,y:0.1,s:1.5,color:'#FFF'},{type:'bird',x:0.5,y:0.3,s:1},{type:'tree',x:0.8,y:0.6,s:1},{type:'ball',x:0.3,y:0.2,s:0.3,color:'#FFEB3B'}], diffs:[{id:0,type:'color',altColor:'#FFD600'},{id:1,type:'move'},{id:3,type:'missing'}] }, // 8. Night
+            { bg:'#80DEEA', ground:'#FFCC80', groundY:0.7, objects:[{type:'sun',x:0.1,y:0.1,s:1},{type:'ball',x:0.3,y:0.8,s:1,color:'red'},{type:'ball',x:0.7,y:0.8,s:1.5,color:'blue'},{type:'cloud',x:0.8,y:0.2,s:1}], diffs:[{id:1,type:'move'},{id:3,type:'missing'},{id:2,type:'color',altColor:'green'}] }, // 9. Beach
+            { bg:'#E1BEE7', ground:'#F8BBD0', groundY:0.5, objects:[{type:'ball',x:0.2,y:0.3,s:1,color:'#E91E63'},{type:'ball',x:0.5,y:0.5,s:1.2,color:'#9C27B0'},{type:'ball',x:0.8,y:0.3,s:1,color:'#2196F3'},{type:'cloud',x:0.5,y:0.1,s:1}], diffs:[{id:0,type:'color',altColor:'#FFEB3B'},{id:1,type:'missing'},{id:3,type:'move'},{id:2,type:'missing'}] } // 10. Candy
+        ];
+
+        // --- GAME LOGIC ---
+        class Game {
+            constructor() {
+                this.level = 0;
+                this.score = 0;
+                this.hearts = 3;
+                this.hints = 3;
+                this.foundDiffs = [];
+                this.levelData = null;
+                this.c1 = document.getElementById('c1');
+                this.c2 = document.getElementById('c2');
+                
+                // Bindings
+                this.handleResize = this.handleResize.bind(this);
+                this.handleClick = this.handleClick.bind(this);
+                
+                window.addEventListener('resize', this.handleResize);
+                [this.c1, this.c2].forEach(c => {
+                    c.addEventListener('pointerdown', this.handleClick);
+                });
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                this.level = 0;
+                this.score = 0;
+                this.loadLevel(0);
+            }
+
+            loadLevel(idx) {
+                if(idx >= LEVELS.length) { idx = 0; } // Loop
+                this.level = idx;
+                this.hearts = 3;
+                this.hints = 3;
+                this.levelData = LEVELS[idx];
+                this.foundDiffs = [];
+                
+                this.updateHUD();
+                this.render();
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level + 1;
+                document.getElementById('hud-score').innerText = this.score;
+                let hStr = ""; for(let i=0; i<3; i++) hStr += i<this.hearts ? "❤️" : "🖤";
+                document.getElementById('hud-hearts').innerText = hStr;
+                const hb = document.getElementById('btn-hint');
+                hb.innerHTML = `💡 ${this.hints}`;
+                hb.style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            render() {
+                this.handleResize(); // Set dimensions
+                
+                // Draw Left
+                Art.setCtx(this.c1);
+                Art.render(this.levelData, false, []); // No diffs applied
+
+                // Draw Right
+                Art.setCtx(this.c2);
+                // Filter out found differences so they appear "Corrected" (or keep them to show diff? Usually we want them to match L when found.
+                // Actually, common gameplay: Image R has errors. When found, we circle them.
+                // Let's keep drawing the difference until found? Or remove difference to match Left?
+                // Let's keep difference visible but mark it.
+                Art.render(this.levelData, true, this.levelData.diffs);
+                
+                // Draw markers on both
+                this.drawMarkers();
+            }
+
+            drawMarkers() {
+                // Clear old DOM markers
+                document.querySelectorAll('.marker').forEach(e => e.remove());
+                
+                this.foundDiffs.forEach(diffId => {
+                    // Find coords
+                    const diff = this.levelData.diffs.find(d => d.id === diffId);
+                    const obj = this.levelData.objects[diff.id];
+                    let x = obj.x, y = obj.y;
+                    if(diff.type === 'move') x += 0.15; // Match R position
+                    
+                    this.addMarker(this.c2, x, y);
+                    // Optional: Marker on Left too
+                    this.addMarker(this.c1, this.levelData.objects[diff.id].x, this.levelData.objects[diff.id].y);
+                });
+            }
+
+            addMarker(canvas, rx, ry) {
+                const rect = canvas.getBoundingClientRect();
+                const m = document.createElement('div');
+                m.className = 'marker';
+                m.style.left = (rx * 100) + '%';
+                m.style.top = (ry * 100) + '%';
+                m.style.width = (rect.width * 0.15) + 'px';
+                m.style.height = (rect.width * 0.15) + 'px';
+                canvas.parentElement.appendChild(m);
+            }
+
+            handleResize() {
+                [this.c1, this.c2].forEach(c => {
+                    const rect = c.parentElement.getBoundingClientRect();
+                    c.width = rect.width;
+                    c.height = rect.height;
+                });
+            }
+
+            handleClick(e) {
+                const rect = e.target.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                
+                // Check against differences
+                let hit = false;
+                
+                // Need to check coordinates based on Right Side logic (since we usually click errors)
+                // If clicking Left side, map to Right side coords? Or allow clicking target on Left?
+                // Allow clicking either side is most kid-friendly.
+                
+                // Check all active differences
+                this.levelData.diffs.forEach(d => {
+                    if(this.foundDiffs.includes(d.id)) return;
+                    
+                    const obj = this.levelData.objects[d.id];
+                    
+                    // Coords on Left
+                    const lx = obj.x, ly = obj.y;
+                    // Coords on Right
+                    let rx = obj.x, ry = obj.y;
+                    if(d.type === 'move') rx += 0.15;
+                    
+                    // Dist Check (Approx radius 0.1)
+                    const distL = Math.hypot(x-lx, y-ly);
+                    const distR = Math.hypot(x-rx, y-ry);
+                    
+                    if(distL < 0.1 || distR < 0.1) {
+                        this.foundDiffs.push(d.id);
+                        hit = true;
+                        this.score += 100;
+                        AudioSys.ding();
+                        this.render(); // Redraw to show marker
+                        
+                        if(this.foundDiffs.length === this.levelData.diffs.length) {
+                            setTimeout(() => this.winLevel(), 500);
+                        }
+                    }
+                });
+
+                if(!hit) {
+                    AudioSys.oops();
+                    this.hearts--;
+                    this.updateHUD();
+                    e.target.parentElement.classList.add('shake');
+                    setTimeout(() => e.target.parentElement.classList.remove('shake'), 500);
+                    
+                    if(this.hearts <= 0) {
+                        setTimeout(() => this.loseLevel(), 500);
+                    }
+                }
+            }
+
+            useHint() {
+                if(this.hints <= 0) return;
+                
+                // Find unfound diff
+                const unfound = this.levelData.diffs.find(d => !this.foundDiffs.includes(d.id));
+                if(!unfound) return;
+                
+                this.hints--;
+                this.updateHUD();
+                
+                // Show hint on Left Canvas (Answer Key)
+                const obj = this.levelData.objects[unfound.id];
+                const wrap = document.getElementById('wrap-left');
+                
+                const ring = document.createElement('div');
+                ring.className = 'hint-ring';
+                ring.style.left = (obj.x * 100) + '%';
+                ring.style.top = (obj.y * 100) + '%';
+                ring.style.width = '15%'; ring.style.height = '20%'; // Approx
+                
+                const arrow = document.createElement('div');
+                arrow.className = 'hint-arrow';
+                arrow.innerText = '👆';
+                arrow.style.left = (obj.x * 100) + '%';
+                arrow.style.top = (obj.y * 100 + 10) + '%';
+                
+                wrap.appendChild(ring);
+                wrap.appendChild(arrow);
+                
+                setTimeout(() => {
+                    ring.remove();
+                    arrow.remove();
+                }, 1200);
+            }
+
+            winLevel() {
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                document.getElementById('win-msg').innerText = `Level ${this.level+1} Complete!`;
+                document.getElementById('game-ui').classList.add('hidden');
+                document.getElementById('win-screen').classList.remove('hidden');
+            }
+
+            loseLevel() {
+                document.getElementById('game-ui').classList.add('hidden');
+                document.getElementById('lose-screen').classList.remove('hidden');
+            }
+
+            nextLevel() {
+                document.getElementById('win-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                this.loadLevel(this.level + 1);
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                this.loadLevel(this.level);
+            }
+
+            goHome() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+            
+            openHowTo() {
+                document.getElementById('modal-howto').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+        // Init draw on load to prevent blank
+        window.onload = () => {};
+
+    </script>
+</body>
+</html>
