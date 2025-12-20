@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bấm Đúng Chữ - Học Tiếng Việt</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #E3F2FD; /* Pastel Blue */
+            --primary: #FF7043; /* Pastel Orange */
+            --accent: #66BB6A; /* Pastel Green */
+            --text-color: #37474F;
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(#BBDEFB 10%, transparent 11%), radial-gradient(#BBDEFB 10%, transparent 11%);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            font-family: var(--font-main);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI OVERLAY --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            z-index: 20; transition: opacity 0.3s;
+        }
+        .hidden { opacity: 0; pointer-events: none; z-index: -1; }
+
+        .btn {
+            background: var(--primary); color: white; border: none; border-radius: 50px;
+            padding: 15px 40px; font-size: 1.5rem; font-weight: bold;
+            box-shadow: 0 6px 0 #D84315; cursor: pointer; margin: 15px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-home { background: #42A5F5; box-shadow: 0 5px 0 #1565C0; }
+
+        /* --- HUD --- */
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 10px; z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        
+        .top-row {
+            display: flex; justify-content: space-between; align-items: center; width: 100%;
+            padding: 0 10px;
+        }
+
+        .stat-box {
+            background: #FFF; padding: 8px 15px; border-radius: 20px;
+            font-weight: bold; font-size: 1.1rem; color: #333;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.1); pointer-events: auto;
+            display: flex; align-items: center; gap: 5px;
+        }
+        
+        .hearts { color: #F44336; font-size: 1.5rem; letter-spacing: 2px; }
+
+        /* --- TASK BAR --- */
+        #task-bar {
+            background: #FFF; padding: 10px 30px; border-radius: 50px;
+            display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            border: 4px solid var(--accent);
+            align-self: center; pointer-events: auto;
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+        #target-letter { font-size: 2.5rem; font-weight: 900; color: #E91E63; }
+        .speak-btn {
+            background: var(--primary); border: none; border-radius: 50%; width: 45px; height: 45px;
+            font-size: 1.5rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 0 #BF360C;
+        }
+        .speak-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        /* --- HINT BTN --- */
+        #hint-btn {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 70px; height: 70px; border-radius: 50%;
+            background: #FFCA28; border: 4px solid #FF6F00;
+            font-size: 2rem; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 6px 0 #FF6F00; cursor: pointer; pointer-events: auto; z-index: 15;
+            flex-direction: column;
+        }
+        #hint-btn:active { transform: translateY(4px); box-shadow: none; }
+        #hint-count { font-size: 0.9rem; font-weight: bold; color: #333; margin-top: -5px; }
+
+        /* --- CANVAS --- */
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* --- ANIMATIONS --- */
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+        .shake-screen { animation: shake 0.4s; background-color: #FFEBEE !important; }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1 style="color: var(--primary); font-size: 3rem; margin-bottom: 10px; text-align: center;">Bấm Đúng Chữ</h1>
+        <div style="font-size: 5rem; margin-bottom: 20px;">🎈🅰️🇻🇳</div>
+        <p style="font-size: 1.2rem;">Học bảng chữ cái Tiếng Việt</p>
+        <button class="btn" onclick="game.start()">CHƠI NGAY ▶</button>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div class="top-row">
+            <div class="stat-box">
+                <button onclick="game.goHome()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">🏠</button>
+                <span>Cấp <span id="hud-level">1</span></span>
+            </div>
+            <div class="stat-box hearts" id="hearts-display">❤️❤️❤️</div>
+        </div>
+        <div id="task-bar">
+            <span style="font-weight:bold; color:#555; font-size: 1.2rem;">Bấm chữ: </span>
+            <span id="target-letter">A</span>
+            <button class="speak-btn" onclick="game.speakTarget()">🔊</button>
+        </div>
+    </div>
+
+    <button id="hint-btn" class="hidden" onclick="game.useHint()">
+        💡 <span id="hint-count">3</span>
+    </button>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: var(--accent)">Giỏi Quá! 🎉</h1>
+        <div style="font-size: 4rem;">⭐🎈⭐</div>
+        <h2 id="win-msg">Hoàn thành màn chơi!</h2>
+        <button class="btn" onclick="game.nextLevel()">Tiếp Theo ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+        <h1 style="color: #F44336">Ôi Không! 😢</h1>
+        <p>Hết tim rồi bé ơi!</p>
+        <button class="btn" onclick="game.retryLevel()">Thử Lại ↺</button>
+        <button class="btn btn-home" onclick="game.goHome()">Về Nhà</button>
+    </div>
+
+    <script>
+        // --- DATA TIẾNG VIỆT ---
+        // Bảng chữ cái đầy đủ bao gồm các ký tự có dấu
+        const ALPHABET = [
+            'A', 'Ă', 'Â', 'B', 'C', 'D', 'Đ', 'E', 'Ê', 
+            'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'Ô', 'Ơ', 
+            'P', 'Q', 'R', 'S', 'T', 'U', 'Ư', 'V', 'X', 'Y'
+        ];
+
+        // --- AUDIO SYSTEM ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + duration);
+            },
+            ding: function() { this.playTone(800, 'sine', 0.1); setTimeout(()=>this.playTone(1200, 'sine', 0.1), 100); },
+            oops: function() { this.playTone(150, 'sawtooth', 0.3); },
+            speak: function(text) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                // Cố gắng tìm giọng tiếng Việt
+                const voices = window.speechSynthesis.getVoices();
+                const viVoice = voices.find(v => v.lang.includes('vi'));
+                if(viVoice) u.voice = viVoice;
+                
+                u.lang = 'vi-VN'; 
+                u.rate = 0.8; // Đọc chậm cho bé nghe rõ
+                u.pitch = 1.1; // Giọng cao vui vẻ
+                window.speechSynthesis.speak(u);
+            }
+        };
+
+        // --- GAME OBJECTS ---
+        class Bubble {
+            constructor(letter, w, h, speedBase) {
+                this.letter = letter;
+                this.r = 40 + Math.random() * 10; // Bán kính 40-50
+                this.w = w; this.h = h;
+                
+                this.x = Math.random() * (w - 100) + 50;
+                this.y = h + this.r + Math.random() * 200; // Bắt đầu từ dưới màn hình
+                
+                // Tốc độ bay lên
+                this.speedY = speedBase + Math.random() * 1.5;
+                this.wobble = Math.random() * Math.PI * 2;
+                this.wobbleSpeed = 0.02 + Math.random() * 0.02;
+
+                // Màu sắc Pastel ngẫu nhiên
+                const colors = ['#FFCDD2', '#F8BBD0', '#E1BEE7', '#D1C4E9', '#C5CAE9', '#BBDEFB', '#B3E0F5', '#B2DFDB', '#C8E6C9', '#DCEDC8', '#F0F4C3', '#FFF9C4', '#FFECB3', '#FFE0B2', '#FFCCBC'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                
+                this.highlight = false;
+                this.popped = false;
+                this.scale = 1;
+            }
+
+            update() {
+                if(this.popped) {
+                    this.scale -= 0.1;
+                    return (this.scale > 0);
+                }
+
+                this.y -= this.speedY;
+                this.x += Math.sin(this.wobble) * 1.5; // Lắc lư qua lại
+                this.wobble += this.wobbleSpeed;
+
+                // Nếu bay quá màn hình, reset xuống dưới để tái sử dụng (hoặc xóa)
+                // Trong game này, nếu bay hết mà chưa bấm thì sẽ spawn lại ở logic game
+                return (this.y > -100); 
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+
+                // Glow effect if hint
+                if(this.highlight) {
+                    ctx.shadowColor = "#FFEB3B";
+                    ctx.shadowBlur = 30;
+                }
+
+                // Bubble Body
+                ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.arc(0, 0, this.r, 0, Math.PI*2); ctx.fill();
+                
+                // Shine (Bóng kính)
+                ctx.fillStyle = "rgba(255,255,255,0.4)";
+                ctx.beginPath(); ctx.arc(-this.r*0.3, -this.r*0.3, this.r*0.2, 0, Math.PI*2); ctx.fill();
+
+                // Border
+                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(0, 0, this.r, 0, Math.PI*2); ctx.stroke();
+
+                // Letter
+                ctx.fillStyle = "#333";
+                ctx.font = "bold 40px 'Comic Sans MS', Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.letter, 0, 3); // +3 để căn giữa visually
+
+                ctx.restore();
+            }
+
+            checkHit(x, y) {
+                const dist = Math.hypot(x - this.x, y - this.y);
+                return dist < this.r + 10; // Hitbox rộng hơn xíu
+            }
+        }
+
+        // --- MAIN GAME ---
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.level = 1;
+                this.hearts = 3;
+                this.hints = 3;
+                this.bubbles = [];
+                this.targetChar = '';
+                this.isRunning = false;
+                this.spawnTimer = 0;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                // Input
+                this.canvas.addEventListener('pointerdown', e => this.handleInput(e));
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('hud').classList.remove('hidden');
+                document.getElementById('hint-btn').classList.remove('hidden');
+                
+                AudioSys.init();
+                // Load voices fix for Chrome
+                window.speechSynthesis.getVoices(); 
+
+                this.level = 1;
+                this.startLevel();
+                this.isRunning = true;
+                this.loop();
+            }
+
+            startLevel() {
+                this.hearts = 3;
+                this.hints = 3;
+                this.updateHUD();
+                this.bubbles = [];
+                
+                // Config Level
+                // Level 1: A, B, C... (Dễ)
+                // Level 10: Full alphabet, tốc độ nhanh
+                
+                this.pickTarget();
+                
+                // Spawn bubbles immediately
+                const initialCount = 5 + Math.min(this.level, 5);
+                for(let i=0; i<initialCount; i++) this.spawnBubble();
+            }
+
+            pickTarget() {
+                // Chọn chữ cái mục tiêu ngẫu nhiên từ bảng chữ cái
+                this.targetChar = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+                
+                // UI update
+                document.getElementById('target-letter').innerText = this.targetChar;
+                
+                // Đọc chữ
+                setTimeout(() => this.speakTarget(), 500);
+            }
+
+            speakTarget() {
+                AudioSys.speak("Bấm chữ " + this.targetChar);
+            }
+
+            spawnBubble() {
+                const speed = 1 + (this.level * 0.2); // Tăng tốc theo level
+                
+                // Xác suất: 30% ra chữ đúng, 70% ra chữ sai
+                let char;
+                if(Math.random() < 0.3) {
+                    char = this.targetChar;
+                } else {
+                    do {
+                        char = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+                    } while (char === this.targetChar);
+                }
+                
+                this.bubbles.push(new Bubble(char, this.canvas.width, this.canvas.height, speed));
+            }
+
+            update() {
+                // Spawn logic: Giữ số lượng bóng trên màn hình
+                const maxBubbles = 6 + this.level; 
+                if(this.bubbles.length < maxBubbles && Math.random() < 0.05) {
+                    this.spawnBubble();
+                }
+
+                // Update bubbles
+                for(let i = this.bubbles.length - 1; i >= 0; i--) {
+                    const b = this.bubbles[i];
+                    const alive = b.update();
+                    if(!alive) {
+                        this.bubbles.splice(i, 1);
+                        // Nếu bóng chữ ĐÚNG bị bay mất -> spawn lại ngay để bé tìm
+                        if(b.letter === this.targetChar && !b.popped) {
+                            setTimeout(() => {
+                                const speed = 1 + (this.level * 0.2);
+                                this.bubbles.push(new Bubble(this.targetChar, this.canvas.width, this.canvas.height, speed));
+                            }, 500);
+                        }
+                    }
+                }
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.bubbles.forEach(b => b.draw(this.ctx));
+            }
+
+            loop() {
+                if(!this.isRunning) return;
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.loop());
+            }
+
+            handleInput(e) {
+                if(!this.isRunning) return;
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Check hit (duyệt ngược để bấm bóng ở trên trước)
+                for(let i = this.bubbles.length - 1; i >= 0; i--) {
+                    const b = this.bubbles[i];
+                    if(!b.popped && b.checkHit(x, y)) {
+                        if(b.letter === this.targetChar) {
+                            // CORRECT
+                            b.popped = true;
+                            AudioSys.ding();
+                            AudioSys.speak("Đúng rồi!");
+                            
+                            // Confetti
+                            const cx = x / window.innerWidth;
+                            const cy = y / window.innerHeight;
+                            confetti({ particleCount: 50, spread: 70, origin: { x: cx, y: cy } });
+
+                            setTimeout(() => this.winLevel(), 1000);
+                        } else {
+                            // WRONG
+                            AudioSys.oops();
+                            // Rung màn hình
+                            document.body.classList.add('shake-screen');
+                            setTimeout(() => document.body.classList.remove('shake-screen'), 400);
+                            
+                            this.hearts--;
+                            this.updateHUD();
+                            
+                            // Đẩy bóng bay ra xa hoặc nổ nhẹ (visual feedback)
+                            b.speedY += 5; 
+                            
+                            if(this.hearts <= 0) {
+                                setTimeout(() => this.loseLevel(), 500);
+                            }
+                        }
+                        return; // Chỉ bấm 1 bóng mỗi lần
+                    }
+                }
+            }
+
+            useHint() {
+                if(this.hints > 0) {
+                    // Tìm bóng chứa chữ đúng
+                    const targetBubble = this.bubbles.find(b => b.letter === this.targetChar && !b.popped);
+                    if(targetBubble) {
+                        this.hints--;
+                        this.updateHUD();
+                        targetBubble.highlight = true;
+                        // Tắt highlight sau 1.5s
+                        setTimeout(() => targetBubble.highlight = false, 1500);
+                    } else {
+                        // Nếu không có bóng đúng trên màn hình, spawn ngay
+                        const speed = 1 + (this.level * 0.2);
+                        const b = new Bubble(this.targetChar, this.canvas.width, this.canvas.height, speed);
+                        b.y = this.canvas.height - 50; // Xuất hiện ngay
+                        b.highlight = true;
+                        this.bubbles.push(b);
+                        this.hints--;
+                        this.updateHUD();
+                        setTimeout(() => b.highlight = false, 1500);
+                    }
+                }
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level;
+                let h = ""; for(let i=0; i<3; i++) h += i<this.hearts ? "❤️" : "🖤";
+                document.getElementById('hearts-display').innerText = h;
+                
+                const hb = document.getElementById('hint-btn');
+                document.getElementById('hint-count').innerText = this.hints;
+                hb.style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            winLevel() {
+                this.isRunning = false;
+                document.getElementById('win-screen').classList.remove('hidden');
+                confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
+            }
+
+            loseLevel() {
+                this.isRunning = false;
+                document.getElementById('lose-screen').classList.remove('hidden');
+            }
+
+            nextLevel() {
+                if(this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    this.startLevel();
+                    this.isRunning = true;
+                    this.loop();
+                } else {
+                    document.getElementById('win-msg').innerText = "Bé đã học hết các bài!";
+                    // Reset về lv 1 hoặc giữ nguyên
+                    this.level = 1;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    this.startLevel();
+                    this.isRunning = true;
+                    this.loop();
+                }
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.add('hidden');
+                this.startLevel();
+                this.isRunning = true;
+                this.loop();
+            }
+
+            goHome() {
+                this.isRunning = false;
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('hud').classList.add('hidden');
+                document.getElementById('hint-btn').classList.add('hidden');
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>
