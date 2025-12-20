@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kéo Thả Ghép Từ</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg: #F3E5F5;
+            --primary: #9C27B0;
+            --accent: #FFEB3B;
+            --success: #4CAF50;
+            --error: #F44336;
+            --card-word: #E1BEE7;
+            --card-img: #FFFFFF;
+            --font: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg);
+            font-family: var(--font);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI HELPERS --- */
+        .hidden { display: none !important; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--bg); z-index: 20; padding: 15px;
+            transition: opacity 0.3s;
+        }
+
+        .btn {
+            background: var(--primary); color: white; border: none; border-radius: 50px;
+            padding: 12px 30px; font-size: 1.2rem; font-weight: bold;
+            box-shadow: 0 5px 0 #7B1FA2; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-home { background: #607D8B; box-shadow: 0 5px 0 #455A64; }
+
+        /* --- HUD --- */
+        #header {
+            height: 60px; width: 100%; background: #FFF;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 10;
+        }
+        .stat-group { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #333; }
+        .hearts { color: var(--error); letter-spacing: 2px; font-size: 1.3rem; }
+
+        /* --- GAME AREA --- */
+        #game-area {
+            flex: 1; width: 100%; max-width: 800px; margin: 0 auto;
+            display: flex; justify-content: space-between; padding: 15px;
+            position: relative; overflow-y: auto;
+        }
+
+        .column {
+            display: flex; flex-direction: column; gap: 12px;
+            width: 46%; justify-content: center;
+        }
+
+        .card {
+            border-radius: 12px; height: 65px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+            position: relative; z-index: 5;
+            transition: transform 0.1s;
+        }
+
+        /* Draggable Word (Left) */
+        .card.word {
+            background: var(--card-word); font-size: 1.1rem; color: #4A148C;
+            cursor: grab; touch-action: none;
+        }
+        .card.word:active { cursor: grabbing; transform: scale(1.05); }
+        .card.word.matched {
+            background: var(--success); color: white; border: 2px solid #2E7D32;
+            pointer-events: none; opacity: 0.8;
+        }
+
+        /* Drop Zone Image (Right) */
+        .card.image {
+            background: var(--card-img); font-size: 2.5rem;
+            border: 2px dashed #BDBDBD;
+        }
+        .card.image.matched {
+            border: 2px solid var(--success); background: #E8F5E9; opacity: 0.8;
+        }
+        
+        /* Dragging State */
+        .dragging {
+            z-index: 100 !important; opacity: 0.9;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3) !important;
+            transform: scale(1.1) !important;
+        }
+
+        /* Hint Animation */
+        @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); } 100% { opacity: 1; transform: scale(1); } }
+        .hint-active { animation: blink 0.5s infinite; border: 2px solid var(--accent) !important; box-shadow: 0 0 10px var(--accent); }
+
+        /* Progress Bar */
+        #progress-bar {
+            position: absolute; bottom: 0; left: 0; height: 6px;
+            background: var(--success); width: 0%; transition: width 0.3s;
+        }
+
+        /* Responsive Text */
+        @media (max-width: 380px) {
+            .card.word { font-size: 0.9rem; }
+            .card.image { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1 style="color: var(--primary); margin-bottom: 10px;">Kéo Thả Ghép Từ</h1>
+        <div style="font-size: 5rem; margin-bottom: 20px;">🤏🧩🇻🇳</div>
+        <p>Ghép chữ vào hình đúng nhé!</p>
+        <button class="btn" onclick="game.start()">CHƠI NGAY ▶</button>
+    </div>
+
+    <div id="game-ui" class="screen hidden" style="justify-content: flex-start; padding: 0;">
+        <div id="header">
+            <div class="stat-group">
+                <button class="btn btn-small btn-home" onclick="game.showHome()" style="padding:5px 12px; font-size:1rem; margin:0;">🏠</button>
+                <span>Cấp <span id="hud-level">1</span></span>
+            </div>
+            <div class="stat-group">
+                <span id="hud-hearts" class="hearts">❤️❤️❤️</span>
+            </div>
+            <div class="stat-group">
+                <button class="btn btn-small" id="btn-hint" onclick="game.useHint()" style="padding:5px 10px; font-size:0.9rem; margin:0; background:#FFC107; color:#333;">💡 3</button>
+            </div>
+        </div>
+
+        <div id="game-area">
+            <div class="column" id="col-words">
+                </div>
+            <div class="column" id="col-images">
+                </div>
+        </div>
+        
+        <div id="progress-container" style="width:100%; background:#eee; height:6px; position:absolute; bottom:0;">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: var(--success)">Giỏi Quá! 🎉</h1>
+        <div style="font-size: 4rem; margin: 20px;">⭐🏆⭐</div>
+        <h2 id="win-msg">Hoàn thành màn chơi!</h2>
+        <button class="btn" onclick="game.nextLevel()">Màn Tiếp Theo ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+        <h1 style="color: var(--error)">Tiếc Quá! 😢</h1>
+        <p>Bé hết tim rồi.</p>
+        <button class="btn" onclick="game.retryLevel()">Thử Lại ↺</button>
+        <button class="btn btn-home" onclick="game.showHome()">Về Nhà</button>
+    </div>
+
+    <script>
+        // --- DATA TIẾNG VIỆT ---
+        const DATABASE = [
+            // Animals
+            {id:1, w:"CHÓ", e:"🐶"}, {id:2, w:"MÈO", e:"🐱"}, {id:3, w:"GÀ", e:"🐔"},
+            {id:4, w:"LỢN", e:"🐷"}, {id:5, w:"BÒ", e:"🐮"}, {id:6, w:"VỊT", e:"🦆"},
+            {id:7, w:"CÁ", e:"🐟"}, {id:8, w:"KHỈ", e:"🐵"}, {id:9, w:"THỎ", e:"🐰"},
+            // Fruits
+            {id:10, w:"TÁO", e:"🍎"}, {id:11, w:"CAM", e:"🍊"}, {id:12, w:"NHO", e:"🍇"},
+            {id:13, w:"CHUỐI", e:"🍌"}, {id:14, w:"DƯA", e:"🍉"}, {id:15, w:"ĐÀO", e:"🍑"},
+            // Vehicles
+            {id:16, w:"XE HƠI", e:"🚗"}, {id:17, w:"XE BUÝT", e:"🚌"}, {id:18, w:"MÁY BAY", e:"✈️"},
+            {id:19, w:"TÀU", e:"🚢"}, {id:20, w:"XE ĐẠP", e:"🚲"}, {id:21, w:"XE MÁY", e:"🛵"},
+            // Objects
+            {id:22, w:"BÓNG", e:"⚽"}, {id:23, w:"SÁCH", e:"📖"}, {id:24, w:"BÚT", e:"🖊️"},
+            {id:25, w:"GIÀY", e:"👟"}, {id:26, w:"ÁO", e:"👕"}, {id:27, w:"MŨ", e:"👒"},
+            {id:28, w:"ĐỒNG HỒ", e:"⏰"}, {id:29, w:"ĐIỆN THOẠI", e:"📱"}, {id:30, w:"QUÀ", e:"🎁"},
+            // Nature
+            {id:31, w:"MẶT TRỜI", e:"☀️"}, {id:32, w:"MẶT TRĂNG", e:"🌙"}, {id:33, w:"SAO", e:"⭐"},
+            {id:34, w:"HOA", e:"🌸"}, {id:35, w:"CÂY", e:"🌳"}, {id:36, w:"LỬA", e:"🔥"}
+        ];
+
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + duration);
+            },
+            ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.2), 100); },
+            oops: function() { this.playTone(150, 'sawtooth', 0.3); }
+        };
+
+        // --- GAME ENGINE ---
+        class Game {
+            constructor() {
+                this.level = 1;
+                this.hearts = 3;
+                this.hints = 3;
+                this.pairs = [];
+                this.matchedCount = 0;
+                this.dragEl = null;
+                this.startPos = { x: 0, y: 0 };
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                AudioSys.init();
+                this.level = 1;
+                this.startLevel();
+            }
+
+            startLevel() {
+                this.hearts = 3;
+                this.hints = 3;
+                this.matchedCount = 0;
+                this.updateHUD();
+                document.getElementById('progress-bar').style.width = '0%';
+
+                // Config Level
+                let count = 3;
+                if(this.level > 3) count = 4;
+                if(this.level > 6) count = 5;
+                if(this.level > 8) count = 6;
+
+                // Pick Items
+                const shuffled = [...DATABASE].sort(() => 0.5 - Math.random());
+                this.pairs = shuffled.slice(0, count);
+
+                this.renderBoard();
+            }
+
+            renderBoard() {
+                const wCol = document.getElementById('col-words');
+                const iCol = document.getElementById('col-images');
+                wCol.innerHTML = '';
+                iCol.innerHTML = '';
+
+                // Shuffle for display
+                const words = [...this.pairs].sort(() => 0.5 - Math.random());
+                const images = [...this.pairs].sort(() => 0.5 - Math.random());
+
+                words.forEach(p => {
+                    const el = document.createElement('div');
+                    el.className = 'card word';
+                    el.innerText = p.w;
+                    el.dataset.id = p.id;
+                    this.enableDrag(el);
+                    wCol.appendChild(el);
+                });
+
+                images.forEach(p => {
+                    const el = document.createElement('div');
+                    el.className = 'card image';
+                    el.innerText = p.e;
+                    el.dataset.id = p.id;
+                    iCol.appendChild(el);
+                });
+            }
+
+            // --- POINTER EVENTS DRAG LOGIC ---
+            enableDrag(el) {
+                el.onpointerdown = (e) => {
+                    if(el.classList.contains('matched')) return;
+                    
+                    el.setPointerCapture(e.pointerId);
+                    this.dragEl = el;
+                    this.startPos = { x: e.clientX, y: e.clientY };
+                    
+                    el.classList.add('dragging');
+                };
+
+                el.onpointermove = (e) => {
+                    if(!this.dragEl) return;
+                    e.preventDefault();
+                    
+                    const dx = e.clientX - this.startPos.x;
+                    const dy = e.clientY - this.startPos.y;
+                    
+                    this.dragEl.style.transform = `translate(${dx}px, ${dy}px) rotate(3deg)`;
+                };
+
+                el.onpointerup = (e) => {
+                    if(!this.dragEl) return;
+                    this.dragEl.releasePointerCapture(e.pointerId);
+                    
+                    // Check Collision
+                    const dropTarget = this.checkDrop(e.clientX, e.clientY);
+                    
+                    if(dropTarget) {
+                        this.handleMatch(this.dragEl, dropTarget);
+                    } else {
+                        // Revert
+                        this.revertDrag(this.dragEl);
+                    }
+                    
+                    this.dragEl = null;
+                };
+            }
+
+            checkDrop(x, y) {
+                // Hide drag element to peek below
+                this.dragEl.style.visibility = 'hidden';
+                const elemBelow = document.elementFromPoint(x, y);
+                this.dragEl.style.visibility = 'visible';
+                
+                if(!elemBelow) return null;
+                return elemBelow.closest('.card.image');
+            }
+
+            handleMatch(dragEl, dropEl) {
+                const id1 = parseInt(dragEl.dataset.id);
+                const id2 = parseInt(dropEl.dataset.id);
+
+                if(id1 === id2) {
+                    // CORRECT
+                    AudioSys.ding();
+                    
+                    dragEl.classList.remove('dragging');
+                    dragEl.style.transform = 'translate(0,0)'; // Reset pos visually but keep flow
+                    
+                    // Style as matched
+                    dragEl.classList.add('matched');
+                    dropEl.classList.add('matched');
+                    
+                    // Move word inside image (optional visual flair) or just lock side by side
+                    // For simplicity in list view: just lock them green.
+                    dragEl.innerText = "✓"; 
+
+                    this.matchedCount++;
+                    const pct = (this.matchedCount / this.pairs.length) * 100;
+                    document.getElementById('progress-bar').style.width = `${pct}%`;
+
+                    if(this.matchedCount === this.pairs.length) {
+                        setTimeout(() => this.winLevel(), 800);
+                    }
+                } else {
+                    // WRONG
+                    AudioSys.oops();
+                    this.hearts--;
+                    this.updateHUD();
+                    this.revertDrag(dragEl);
+                    
+                    if(this.hearts <= 0) {
+                        setTimeout(() => this.loseLevel(), 500);
+                    }
+                }
+            }
+
+            revertDrag(el) {
+                el.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                el.style.transform = 'translate(0,0)';
+                setTimeout(() => {
+                    el.classList.remove('dragging');
+                    el.style.transition = 'transform 0.1s'; // reset to fast for drag
+                }, 300);
+            }
+
+            useHint() {
+                if(this.hints <= 0) return;
+                
+                // Find an unmatched pair
+                const unmatched = this.pairs.find(p => {
+                    const el = document.querySelector(`.card.word[data-id="${p.id}"]`);
+                    return !el.classList.contains('matched');
+                });
+
+                if(unmatched) {
+                    this.hints--;
+                    this.updateHUD();
+                    
+                    const wEl = document.querySelector(`.card.word[data-id="${unmatched.id}"]`);
+                    const iEl = document.querySelector(`.card.image[data-id="${unmatched.id}"]`);
+                    
+                    wEl.classList.add('hint-active');
+                    iEl.classList.add('hint-active');
+                    
+                    setTimeout(() => {
+                        wEl.classList.remove('hint-active');
+                        iEl.classList.remove('hint-active');
+                    }, 1000);
+                }
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level;
+                let hStr = ""; for(let i=0;i<3;i++) hStr += i<this.hearts ? "❤️" : "🖤";
+                document.getElementById('hud-hearts').innerText = hStr;
+                const hb = document.getElementById('btn-hint');
+                hb.innerText = `💡 ${this.hints}`;
+                hb.style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            winLevel() {
+                document.getElementById('win-screen').classList.remove('hidden');
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+            }
+
+            loseLevel() {
+                document.getElementById('lose-screen').classList.remove('hidden');
+            }
+
+            nextLevel() {
+                if(this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    this.startLevel();
+                } else {
+                    document.getElementById('win-msg').innerText = "Bé đã hoàn thành tất cả!";
+                    document.querySelector('#win-screen button').style.display = 'none';
+                }
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.add('hidden');
+                this.startLevel();
+            }
+
+            showHome() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+        
+        // Prevent Pull-to-refresh on mobile
+        document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    </script>
+</body>
+</html>
