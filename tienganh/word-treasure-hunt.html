@@ -80,39 +80,46 @@
             font-size: 1.2rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
 
-        /* --- CONTROLS --- */
+        /* --- CONTROLS (Fix: Luôn hiển thị Joystick) --- */
         #joystick-zone {
-            position: absolute; bottom: 30px; left: 30px;
-            width: 120px; height: 120px;
-            background: rgba(0,0,0,0.1); border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.5);
-            display: none; /* Shown on touch */
+            position: absolute; bottom: 40px; left: 40px;
+            width: 140px; height: 140px;
+            background: rgba(0,0,0,0.15); border-radius: 50%;
+            border: 4px solid rgba(255,255,255,0.6);
+            display: block; /* Luôn hiện */
             z-index: 15;
+            touch-action: none; /* Chặn cuộn trang khi chạm */
         }
+        
+        /* Chỉ ẩn joystick trên màn hình rất lớn (PC) nếu muốn, nhưng giữ lại cho an toàn */
+        @media (min-width: 1024px) {
+            #joystick-zone { opacity: 0.3; } /* Mờ đi trên PC */
+            #joystick-zone:hover { opacity: 1; }
+        }
+
         #joystick-knob {
             position: absolute; top: 50%; left: 50%;
-            width: 50px; height: 50px;
-            background: rgba(255,255,255,0.8); border-radius: 50%;
+            width: 60px; height: 60px;
+            background: var(--primary); border-radius: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 3px solid white;
+            pointer-events: none; /* Để touch event xuyên qua zone xử lý */
         }
 
         #hint-btn {
-            position: absolute; bottom: 30px; right: 30px;
-            width: 70px; height: 70px; border-radius: 50%;
+            position: absolute; bottom: 40px; right: 40px;
+            width: 80px; height: 80px; border-radius: 50%;
             background: var(--accent); border: 4px solid #FFCA28;
-            font-size: 2rem; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 0 #FF6F00; cursor: pointer; pointer-events: auto; z-index: 15;
+            font-size: 2.5rem; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 6px 0 #FF6F00; cursor: pointer; pointer-events: auto; z-index: 15;
         }
         #hint-btn:active { transform: translateY(4px); box-shadow: none; }
-        #hint-count { font-size: 0.9rem; position: absolute; bottom: 15px; font-weight: bold; color: #444; }
+        #hint-count { font-size: 1rem; position: absolute; bottom: 18px; font-weight: bold; color: #333; }
 
         /* --- CANVAS --- */
         canvas { display: block; width: 100%; height: 100%; }
 
-        @media (hover: none) and (pointer: coarse) {
-            #joystick-zone { display: block; }
-        }
     </style>
 </head>
 <body>
@@ -120,7 +127,7 @@
     <div id="start-screen" class="screen">
         <h1 style="color: var(--primary); font-size: 3rem; margin-bottom: 10px;">Word Treasure Hunt</h1>
         <div style="font-size: 5rem; margin-bottom: 20px;">🏃‍♂️🗺️💎</div>
-        <p>Use Arrows/Joystick to move!</p>
+        <p>Move to collect words!</p>
         <button class="btn" onclick="game.start()">START ADVENTURE ▶</button>
     </div>
 
@@ -140,7 +147,7 @@
         </div>
     </div>
 
-    <div id="joystick-zone"><div id="joystick-knob"></div></div>
+    <div id="joystick-zone" class="hidden"><div id="joystick-knob"></div></div>
     <div id="hint-btn" class="hidden" onclick="game.useHint()">💡<span id="hint-count">3</span></div>
 
     <canvas id="gameCanvas"></canvas>
@@ -203,7 +210,7 @@
                 this.x = x;
                 this.y = y;
                 this.size = 40;
-                this.speed = 5;
+                this.speed = 6; // Tăng tốc độ một chút
                 this.vx = 0;
                 this.vy = 0;
                 this.emoji = "🏃";
@@ -211,9 +218,12 @@
             }
 
             update(input, w, h) {
-                // Normalize speed for diagonal movement
                 let moveX = input.x;
                 let moveY = input.y;
+                // Deadzone cho joystick
+                if(Math.abs(moveX) < 0.1) moveX = 0;
+                if(Math.abs(moveY) < 0.1) moveY = 0;
+
                 const mag = Math.sqrt(moveX*moveX + moveY*moveY);
                 if (mag > 1) { moveX /= mag; moveY /= mag; }
 
@@ -223,11 +233,9 @@
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Bounds
                 this.x = Math.max(this.size, Math.min(w - this.size, this.x));
                 this.y = Math.max(this.size, Math.min(h - this.size, this.y));
 
-                // Animation direction
                 if(this.vx > 0) this.facingRight = true;
                 if(this.vx < 0) this.facingRight = false;
             }
@@ -239,10 +247,13 @@
                 
                 // Shadow
                 ctx.fillStyle = "rgba(0,0,0,0.2)";
-                ctx.beginPath(); ctx.ellipse(0, 15, 15, 5, 0, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(0, 18, 18, 6, 0, 0, Math.PI*2); ctx.fill();
 
+                // FIX LỖI MỜ: Reset fillStyle về đen hoặc màu mặc định trước khi vẽ Emoji
+                ctx.fillStyle = "#000000"; 
+                
                 // Character
-                ctx.font = "40px Arial";
+                ctx.font = "45px Arial";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(this.emoji, 0, 0);
@@ -252,10 +263,10 @@
 
         class Item {
             constructor(data, x, y, isTarget) {
-                this.data = data; // {w, e} or just e string
+                this.data = data; 
                 this.x = x;
                 this.y = y;
-                this.size = 30;
+                this.size = 35;
                 this.isTarget = isTarget;
                 this.floatOffset = Math.random() * Math.PI * 2;
                 this.collected = false;
@@ -269,13 +280,16 @@
                 ctx.translate(this.x, this.y + floatY);
                 
                 // Shadow
-                ctx.fillStyle = "rgba(0,0,0,0.1)";
-                ctx.beginPath(); ctx.ellipse(0, 20, 12, 4, 0, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "rgba(0,0,0,0.15)";
+                ctx.beginPath(); ctx.ellipse(0, 22, 14, 5, 0, 0, Math.PI*2); ctx.fill();
 
-                ctx.font = "35px Arial";
+                // FIX LỖI MỜ: Reset fillStyle về đen
+                ctx.fillStyle = "#000000";
+
+                ctx.font = "40px Arial";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                const char = this.data.e || this.data; // Handle object or string distractor
+                const char = this.data.e || this.data; 
                 ctx.fillText(char, 0, 0);
                 ctx.restore();
             }
@@ -296,8 +310,8 @@
                 
                 this.player = new Player(0,0);
                 this.items = [];
-                this.targetItem = null; // The object reference
-                this.queue = []; // List of targets for the level
+                this.targetItem = null;
+                this.queue = [];
                 
                 this.input = { x: 0, y: 0 };
                 this.isRunning = false;
@@ -319,11 +333,12 @@
                 window.addEventListener('keydown', e => { keys[e.code] = true; this.updateInput(keys); });
                 window.addEventListener('keyup', e => { keys[e.code] = false; this.updateInput(keys); });
 
-                // Joystick
+                // Joystick (Improved Logic)
                 let startX, startY;
-                const radius = 35; // max drag radius
+                const radius = 50; // Bán kính di chuyển của knob
 
                 const handleMove = (e) => {
+                    e.preventDefault(); // Chặn cuộn trang
                     const touch = e.touches[0];
                     const dx = touch.clientX - startX;
                     const dy = touch.clientY - startY;
@@ -339,22 +354,23 @@
                     this.input.y = knobY / radius;
                 };
 
-                const handleEnd = () => {
+                const handleEnd = (e) => {
                     this.joystickKnob.style.transform = `translate(-50%, -50%)`;
                     this.input.x = 0;
                     this.input.y = 0;
-                    document.removeEventListener('touchmove', handleMove);
-                    document.removeEventListener('touchend', handleEnd);
                 };
 
                 this.joystickZone.addEventListener('touchstart', e => {
-                    e.preventDefault();
+                    e.preventDefault(); // Chặn cuộn trang
+                    const touch = e.touches[0];
                     const rect = this.joystickZone.getBoundingClientRect();
+                    // Tâm của joystick zone
                     startX = rect.left + rect.width / 2;
                     startY = rect.top + rect.height / 2;
-                    document.addEventListener('touchmove', handleMove, {passive: false});
-                    document.addEventListener('touchend', handleEnd);
                 }, {passive: false});
+
+                this.joystickZone.addEventListener('touchmove', handleMove, {passive: false});
+                this.joystickZone.addEventListener('touchend', handleEnd, {passive: false});
             }
 
             updateInput(keys) {
@@ -366,6 +382,7 @@
                 document.getElementById('start-screen').classList.add('hidden');
                 document.getElementById('hud').classList.remove('hidden');
                 document.getElementById('hint-btn').classList.remove('hidden');
+                document.getElementById('joystick-zone').classList.remove('hidden');
                 
                 this.resize();
                 this.level = 1;
@@ -384,24 +401,17 @@
                 this.updateHUD();
 
                 const data = LEVEL_DATA[(this.level - 1) % LEVEL_DATA.length];
-                this.queue = [...data.items]; // Copy targets
+                this.queue = [...data.items]; 
                 
-                // Prepare map
                 this.items = [];
                 const margin = 50;
                 const w = this.canvas.width;
                 const h = this.canvas.height;
 
-                // Player Start
                 this.player.x = w / 2;
                 this.player.y = h / 2;
 
-                // Create items (Targets + Distractors)
-                // 1. Place targets
-                this.queue.forEach(t => {
-                    this.spawnItem(t, true);
-                });
-                // 2. Place distractors
+                this.queue.forEach(t => { this.spawnItem(t, true); });
                 const distCount = 5 + this.level;
                 for(let i=0; i<distCount; i++) {
                     const d = data.distractors[i % data.distractors.length];
@@ -420,9 +430,7 @@
                     y = margin + Math.random() * (this.canvas.height - margin * 2);
                     tooClose = false;
                     
-                    // Check against player
                     if(Math.hypot(x - this.player.x, y - this.player.y) < 150) tooClose = true;
-                    // Check against other items
                     for(let item of this.items) {
                         if(Math.hypot(x - item.x, y - item.y) < 60) tooClose = true;
                     }
@@ -438,11 +446,8 @@
                     return;
                 }
                 const nextData = this.queue.shift();
-                
-                // Find this specific item instance in the world
                 this.targetItem = this.items.find(i => i.isTarget && i.data.w === nextData.w && !i.collected);
                 
-                // UI
                 document.getElementById('target-word').innerText = nextData.w;
                 setTimeout(() => this.speakTarget(), 500);
             }
@@ -455,7 +460,6 @@
             update() {
                 this.player.update(this.input, this.canvas.width, this.canvas.height);
 
-                // Collision Detection
                 for(let item of this.items) {
                     if(item.collected) continue;
                     
@@ -465,38 +469,22 @@
                     }
                 }
 
-                // Hint timer
-                if(this.hintActive) {
-                    if(Date.now() > this.hintTimer) this.hintActive = false;
-                }
+                if(this.hintActive && Date.now() > this.hintTimer) this.hintActive = false;
             }
 
             handleCollision(item) {
                 if(item === this.targetItem) {
-                    // Correct
                     item.collected = true;
                     this.score += 100;
                     AudioSys.collect();
-                    
-                    // Confetti at item pos
                     const cx = item.x / this.canvas.width;
                     const cy = item.y / this.canvas.height;
                     confetti({ particleCount: 50, spread: 50, origin: { x: cx, y: cy } });
-
                     this.updateHUD();
                     this.hintActive = false;
                     this.nextTarget();
                 } else {
-                    // Wrong
-                    if(!item.isTarget) { // Only penalty for distractors or wrong order targets?
-                        // Let's penalize for anything that isn't the CURRENT target
-                        this.triggerPenalty();
-                        // Push player back
-                        const angle = Math.atan2(this.player.y - item.y, this.player.x - item.x);
-                        this.player.x += Math.cos(angle) * 30;
-                        this.player.y += Math.sin(angle) * 30;
-                    } else if (item.isTarget && item !== this.targetItem) {
-                         // Hit a future target
+                    if(!item.isTarget || (item.isTarget && item !== this.targetItem)) {
                          this.triggerPenalty();
                          const angle = Math.atan2(this.player.y - item.y, this.player.x - item.x);
                          this.player.x += Math.cos(angle) * 30;
@@ -518,11 +506,9 @@
             }
 
             draw() {
-                // Clear
                 this.ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-land');
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-                // Grid lines (optional for depth)
                 this.ctx.strokeStyle = "rgba(0,0,0,0.05)";
                 this.ctx.lineWidth = 2;
                 const gridSize = 100;
@@ -533,32 +519,29 @@
                     this.ctx.beginPath(); this.ctx.moveTo(0,y); this.ctx.lineTo(this.canvas.width,y); this.ctx.stroke();
                 }
 
-                // Draw Items
                 this.items.forEach(i => i.draw(this.ctx));
 
-                // Draw Hint Arrow
                 if(this.hintActive && this.targetItem) {
                     this.drawArrow(this.player.x, this.player.y, this.targetItem.x, this.targetItem.y);
                 }
 
-                // Draw Player
                 this.player.draw(this.ctx);
             }
 
             drawArrow(x1, y1, x2, y2) {
                 const angle = Math.atan2(y2 - y1, x2 - x1);
-                const dist = 70; // Distance from player
+                const dist = 70; 
                 const ax = x1 + Math.cos(angle) * dist;
                 const ay = y1 + Math.sin(angle) * dist;
 
                 this.ctx.save();
                 this.ctx.translate(ax, ay);
                 this.ctx.rotate(angle);
-                this.ctx.fillStyle = "rgba(255, 193, 7, 0.7)";
+                this.ctx.fillStyle = "rgba(255, 193, 7, 0.8)";
                 this.ctx.beginPath();
-                this.ctx.moveTo(10, 0);
-                this.ctx.lineTo(-10, 10);
-                this.ctx.lineTo(-10, -10);
+                this.ctx.moveTo(15, 0);
+                this.ctx.lineTo(-15, 15);
+                this.ctx.lineTo(-15, -15);
                 this.ctx.fill();
                 this.ctx.restore();
             }
@@ -574,7 +557,7 @@
                 if(this.hints > 0 && this.targetItem) {
                     this.hints--;
                     this.hintActive = true;
-                    this.hintTimer = Date.now() + 2000; // 2 seconds
+                    this.hintTimer = Date.now() + 2500; 
                     this.updateHUD();
                 }
             }
@@ -621,6 +604,7 @@
                 document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
                 document.getElementById('hud').classList.add('hidden');
                 document.getElementById('hint-btn').classList.add('hidden');
+                document.getElementById('joystick-zone').classList.add('hidden');
                 document.getElementById('start-screen').classList.remove('hidden');
             }
         }
