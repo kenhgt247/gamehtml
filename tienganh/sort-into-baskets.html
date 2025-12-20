@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sort Into Baskets</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #FFF9C4; /* Pastel Yellow */
+            --header-bg: #FFFFFF;
+            --text-color: #5D4037;
+            --basket-1: #FFAB91; /* Pastel Orange */
+            --basket-2: #81D4FA; /* Pastel Blue */
+            --basket-3: #A5D6A7; /* Pastel Green */
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg-color);
+            font-family: var(--font-main);
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI UTILS --- */
+        .hidden { display: none !important; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--bg-color); z-index: 20; padding: 20px;
+            transition: opacity 0.3s;
+        }
+
+        .btn {
+            background: #FF7043; color: white; border: none; border-radius: 50px;
+            padding: 15px 40px; font-size: 1.5rem; font-weight: bold;
+            box-shadow: 0 6px 0 #D84315; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-small { padding: 8px 15px; font-size: 1rem; box-shadow: 0 3px 0 #D84315; }
+
+        /* --- GAME HEADER --- */
+        #header {
+            height: 70px; width: 100%; background: var(--header-bg);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); z-index: 10;
+        }
+        .stat-group { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.1rem; }
+        .hearts { color: #FF5252; font-size: 1.5rem; letter-spacing: 2px; }
+
+        /* --- INSTRUCTION BAR --- */
+        #instruction-bar {
+            background: #FFF; margin: 10px; padding: 10px 20px;
+            border-radius: 15px; display: flex; align-items: center; justify-content: center;
+            gap: 15px; box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+            animation: popIn 0.5s;
+        }
+        #task-text { font-size: 1.3rem; font-weight: 900; color: #0277BD; }
+        .speak-btn {
+            background: #FFCA28; border: none; border-radius: 50%; width: 40px; height: 40px;
+            font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 0 #FFA000;
+        }
+        .speak-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        /* --- GAME AREA --- */
+        #game-area {
+            flex: 1; width: 100%; max-width: 800px; margin: 0 auto;
+            display: flex; flex-direction: column;
+            padding: 10px; position: relative;
+        }
+
+        /* BASKETS ZONE */
+        #baskets-container {
+            flex: 1; display: flex; justify-content: space-around; align-items: flex-end;
+            padding-bottom: 20px; width: 100%;
+        }
+        .basket {
+            width: 30%; height: 160px;
+            border-radius: 0 0 20px 20px;
+            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+            position: relative;
+            border: 4px solid rgba(0,0,0,0.1); border-top: none;
+            background: rgba(255,255,255,0.5);
+            transition: transform 0.2s;
+        }
+        .basket::before {
+            content: ''; position: absolute; top: -20px; left: -4px; right: -4px; height: 20px;
+            border: 4px solid rgba(0,0,0,0.1); border-radius: 50%; background: inherit;
+            z-index: -1;
+        }
+        .basket-label {
+            font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;
+            background: #FFF; padding: 5px 15px; border-radius: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-transform: uppercase;
+        }
+        .basket-icon { font-size: 3rem; position: absolute; bottom: 50px; opacity: 0.3; }
+
+        /* ITEMS ZONE */
+        #items-container {
+            height: 120px; background: rgba(255,255,255,0.3); border-radius: 20px;
+            display: flex; justify-content: center; align-items: center; gap: 15px;
+            margin-bottom: 10px; padding: 10px;
+        }
+        
+        .item {
+            width: 70px; height: 70px; background: #FFF; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.15); cursor: grab;
+            position: relative; z-index: 5;
+            transition: transform 0.2s;
+        }
+        .item:active { cursor: grabbing; transform: scale(1.1); }
+        .item-emoji { font-size: 2.5rem; line-height: 1; }
+        .item-name { font-size: 0.7rem; font-weight: bold; color: #888; margin-top: 2px; text-transform: uppercase; }
+
+        /* ANIMATIONS */
+        .basket.shake { animation: shake 0.4s; background: #FFCDD2; }
+        .basket.highlight { box-shadow: 0 0 20px #FFD700; transform: scale(1.05); border-color: #FFD700; }
+        .item.highlight { animation: bounce 1s infinite; border: 2px solid #FFD700; }
+        .item.dragging { opacity: 0.8; z-index: 100; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes popIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* RESPONSIVE */
+        @media (max-width: 400px) {
+            .basket { height: 120px; }
+            .basket-label { font-size: 0.9rem; padding: 2px 10px; }
+            .item { width: 60px; height: 60px; }
+            #task-text { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1 style="font-size: 3rem; color: #FF7043; margin-bottom: 10px;">Sort Into Baskets</h1>
+        <div style="font-size: 5rem; margin-bottom: 20px;">🦁🧺🍎</div>
+        <p style="font-size: 1.2rem;">Help organize the items!</p>
+        <button class="btn" onclick="game.start()">PLAY ▶</button>
+    </div>
+
+    <div id="game-ui" class="screen hidden" style="justify-content: flex-start; padding: 0;">
+        <div id="header">
+            <div class="stat-group">
+                <button class="btn btn-small" onclick="game.goHome()" style="background:#B0BEC5; box-shadow:0 3px 0 #78909C">🏠</button>
+                <span>Level <span id="lvl-txt">1</span></span>
+            </div>
+            <div class="stat-group">
+                <span id="hearts-display" class="hearts">❤️❤️❤️</span>
+            </div>
+            <div class="stat-group">
+                <button class="btn btn-small" onclick="game.useHint()" id="btn-hint" style="background:#FFCA28; box-shadow:0 3px 0 #FFA000; color:#333;">💡 3</button>
+            </div>
+        </div>
+
+        <div id="instruction-bar">
+            <span id="task-text">Put APPLE into FRUITS</span>
+            <button class="speak-btn" onclick="game.speakInstruction()">🔊</button>
+        </div>
+
+        <div id="game-area">
+            <div id="items-container">
+                </div>
+
+            <div id="baskets-container">
+                </div>
+        </div>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: #66BB6A">Great Job! 🎉</h1>
+        <div style="font-size: 4rem; margin: 20px;">⭐🎈⭐</div>
+        <h2 id="win-msg">Level Complete!</h2>
+        <button class="btn" onclick="game.nextLevel()">Next Level ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+        <h1 style="color: #EF5350">Oops! 😢</h1>
+        <p>Try again?</p>
+        <button class="btn" onclick="game.retryLevel()">Retry ↺</button>
+        <button class="btn btn-small" onclick="game.goHome()" style="background:#B0BEC5">Home</button>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const CATEGORIES = {
+            animals: { 
+                id: 'animals', label: 'ANIMALS', color: '#FFCC80', icon: '🐾',
+                items: [
+                    {n:'Lion', e:'🦁'}, {n:'Dog', e:'🐶'}, {n:'Cat', e:'🐱'}, {n:'Pig', e:'🐷'}, {n:'Frog', e:'🐸'}, 
+                    {n:'Bear', e:'🐻'}, {n:'Duck', e:'🦆'}, {n:'Cow', e:'🐮'}
+                ]
+            },
+            fruits: { 
+                id: 'fruits', label: 'FRUITS', color: '#C5E1A5', icon: '🍇',
+                items: [
+                    {n:'Apple', e:'🍎'}, {n:'Banana', e:'🍌'}, {n:'Grape', e:'🍇'}, {n:'Orange', e:'🍊'}, {n:'Lemon', e:'🍋'},
+                    {n:'Peach', e:'🍑'}, {n:'Pear', e:'🍐'}, {n:'Berry', e:'🍓'}
+                ]
+            },
+            toys: { 
+                id: 'toys', label: 'TOYS', color: '#81D4FA', icon: '🧸',
+                items: [
+                    {n:'Ball', e:'⚽'}, {n:'Car', e:'🚗'}, {n:'Doll', e:'🎎'}, {n:'Robot', e:'🤖'}, {n:'Kite', e:'🪁'},
+                    {n:'Bear', e:'🧸'}, {n:'Yoyo', e:'🪀'}, {n:'Block', e:'🧱'}
+                ]
+            },
+            vehicles: {
+                id: 'vehicles', label: 'VEHICLES', color: '#CE93D8', icon: '🚗',
+                items: [
+                    {n:'Bus', e:'🚌'}, {n:'Car', e:'🚗'}, {n:'Plane', e:'✈️'}, {n:'Ship', e:'🚢'}, {n:'Bike', e:'🚲'},
+                    {n:'Taxi', e:'🚖'}, {n:'Train', e:'🚂'}, {n:'Truck', e:'🚚'}
+                ]
+            },
+            clothes: {
+                id: 'clothes', label: 'CLOTHES', color: '#F48FB1', icon: '👕',
+                items: [
+                    {n:'Shirt', e:'👕'}, {n:'Dress', e:'👗'}, {n:'Hat', e:'👒'}, {n:'Sock', e:'🧦'}, {n:'Shoe', e:'👟'},
+                    {n:'Coat', e:'🧥'}, {n:'Jeans', e:'👖'}, {n:'Scarf', e:'🧣'}
+                ]
+            }
+        };
+
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + duration);
+            },
+            correct: function() { this.playTone(600, 'sine', 0.1); setTimeout(() => this.playTone(800, 'sine', 0.2), 100); },
+            wrong: function() { this.playTone(150, 'sawtooth', 0.3); },
+            speak: function(text) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'en-US'; u.rate = 0.9;
+                window.speechSynthesis.speak(u);
+            }
+        };
+
+        // --- GAME LOGIC ---
+        class Game {
+            constructor() {
+                this.level = 1;
+                this.hearts = 3;
+                this.hints = 3;
+                this.activeCategories = [];
+                this.poolItems = [];
+                this.currentTarget = null;
+                
+                // Drag vars
+                this.dragEl = null;
+                this.startPos = {x:0, y:0};
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                this.level = 1;
+                AudioSys.init();
+                this.startLevel();
+            }
+
+            startLevel() {
+                this.hearts = 3;
+                this.hints = 3;
+                this.updateHUD();
+
+                // Define Level Config
+                let cats = [];
+                let itemCount = 3;
+
+                if (this.level <= 3) {
+                    cats = ['animals', 'fruits'];
+                    itemCount = 3 + (this.level - 1); // 3, 4, 5
+                } else if (this.level <= 7) {
+                    cats = ['toys', 'vehicles', 'animals'];
+                    itemCount = 5 + (this.level - 4); // 5, 6, 7, 8
+                } else {
+                    cats = ['clothes', 'fruits', 'vehicles'];
+                    itemCount = 8 + (this.level - 7); // 9, 10, 11
+                }
+
+                // Randomize categories just in case
+                cats = cats.sort(() => 0.5 - Math.random());
+                this.activeCategories = cats.map(k => CATEGORIES[k]);
+                
+                // Generate Item Pool
+                this.poolItems = [];
+                for(let i=0; i<itemCount; i++) {
+                    const randomCat = this.activeCategories[Math.floor(Math.random() * this.activeCategories.length)];
+                    const randomItem = randomCat.items[Math.floor(Math.random() * randomCat.items.length)];
+                    this.poolItems.push({ 
+                        ...randomItem, 
+                        catId: randomCat.id,
+                        id: Math.random().toString(36).substr(2, 9) 
+                    });
+                }
+
+                this.renderScene();
+                this.pickNextTarget();
+            }
+
+            renderScene() {
+                // Render Baskets
+                const basketContainer = document.getElementById('baskets-container');
+                basketContainer.innerHTML = '';
+                this.activeCategories.forEach(cat => {
+                    const el = document.createElement('div');
+                    el.className = 'basket';
+                    el.style.backgroundColor = cat.color;
+                    el.dataset.catId = cat.id;
+                    el.innerHTML = `
+                        <div class="basket-icon">${cat.icon}</div>
+                        <div class="basket-label">${cat.label}</div>
+                    `;
+                    basketContainer.appendChild(el);
+                });
+
+                // Render Items
+                this.renderItems();
+            }
+
+            renderItems() {
+                const itemContainer = document.getElementById('items-container');
+                itemContainer.innerHTML = '';
+                this.poolItems.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'item';
+                    el.dataset.id = item.id;
+                    el.dataset.catId = item.catId;
+                    el.dataset.name = item.n;
+                    el.innerHTML = `
+                        <div class="item-emoji">${item.e}</div>
+                        <div class="item-name">${item.n}</div>
+                    `;
+                    this.setupDrag(el);
+                    itemContainer.appendChild(el);
+                });
+            }
+
+            pickNextTarget() {
+                if (this.poolItems.length === 0) {
+                    this.completeLevel();
+                    return;
+                }
+                // Target specifically the first item available or random?
+                // Game design: Let's make the player find a SPECIFIC item to teach vocab.
+                this.currentTarget = this.poolItems[0];
+                
+                // Update text
+                const catName = this.activeCategories.find(c => c.id === this.currentTarget.catId).label;
+                const text = `Put ${this.currentTarget.n.toUpperCase()} into ${catName}`;
+                document.getElementById('task-text').innerText = text;
+                
+                setTimeout(() => AudioSys.speak(text), 500);
+            }
+
+            setupDrag(el) {
+                el.onpointerdown = (e) => {
+                    // Only allow dragging the current target? Or any item?
+                    // To make it flexible but guided: Allow dragging ANY item, 
+                    // but check if it matches the current target instruction logic 
+                    // OR just check if it matches the basket.
+                    // Implementation: If prompt says "Put APPLE", and kid drags "BANANA" to Fruit basket:
+                    // It is technically correct categorization but wrong instruction.
+                    // Easier for kids: Allow sorting ANY item correctly, and update instruction if they pick something else.
+                    // STRICT MODE based on prompt "Put APPLE into FRUITS":
+                    // If they drag Banana, it should snap back or update prompt?
+                    // Let's implement: Must drag the TARGET item.
+                    
+                    if (el.dataset.id !== this.currentTarget.id) {
+                        // Optional: wiggle to say "Not this one"
+                        return; 
+                    }
+
+                    el.setPointerCapture(e.pointerId);
+                    this.dragEl = el;
+                    this.startPos = { x: e.clientX, y: e.clientY };
+                    el.classList.add('dragging');
+                };
+
+                el.onpointermove = (e) => {
+                    if (!this.dragEl) return;
+                    e.preventDefault();
+                    const dx = e.clientX - this.startPos.x;
+                    const dy = e.clientY - this.startPos.y;
+                    this.dragEl.style.transform = `translate(${dx}px, ${dy}px) rotate(5deg)`;
+                };
+
+                el.onpointerup = (e) => {
+                    if (!this.dragEl) return;
+                    this.dragEl.releasePointerCapture(e.pointerId);
+                    
+                    const dropTarget = this.checkCollision(e.clientX, e.clientY);
+                    
+                    if (dropTarget) {
+                        this.handleDrop(dropTarget);
+                    } else {
+                        this.resetDrag();
+                    }
+                    
+                    this.dragEl = null;
+                };
+            }
+
+            checkCollision(x, y) {
+                // Hide drag element to check underlying elements
+                this.dragEl.style.visibility = 'hidden';
+                const elemBelow = document.elementFromPoint(x, y);
+                this.dragEl.style.visibility = 'visible';
+                if (!elemBelow) return null;
+                return elemBelow.closest('.basket');
+            }
+
+            handleDrop(basketEl) {
+                const itemCat = this.dragEl.dataset.catId;
+                const basketCat = basketEl.dataset.catId;
+
+                if (itemCat === basketCat) {
+                    // Correct
+                    AudioSys.correct();
+                    // Animation: fly into basket
+                    this.dragEl.style.transition = 'all 0.3s';
+                    this.dragEl.style.transform = 'scale(0)';
+                    this.dragEl.style.opacity = '0';
+                    
+                    // Remove from data
+                    this.poolItems = this.poolItems.filter(i => i.id !== this.currentTarget.id);
+                    
+                    // Confetti on basket
+                    const rect = basketEl.getBoundingClientRect();
+                    confetti({ origin: { x: (rect.left+rect.width/2)/window.innerWidth, y: (rect.top+rect.height/2)/window.innerHeight }, particleCount: 30, spread: 50 });
+
+                    setTimeout(() => {
+                        this.renderItems(); // Refresh DOM
+                        this.pickNextTarget();
+                    }, 500);
+
+                } else {
+                    // Wrong
+                    AudioSys.wrong();
+                    AudioSys.speak("Oops, try again!");
+                    basketEl.classList.add('shake');
+                    setTimeout(() => basketEl.classList.remove('shake'), 400);
+                    
+                    this.hearts--;
+                    this.updateHUD();
+                    this.resetDrag();
+                    
+                    if (this.hearts <= 0) {
+                        setTimeout(() => this.gameOver(), 500);
+                    }
+                }
+            }
+
+            resetDrag() {
+                if(this.dragEl) {
+                    this.dragEl.style.transition = 'transform 0.3s';
+                    this.dragEl.style.transform = 'translate(0,0)';
+                    const temp = this.dragEl;
+                    setTimeout(() => { 
+                        if(temp) {
+                            temp.style.transition = ''; 
+                            temp.classList.remove('dragging');
+                        }
+                    }, 300);
+                }
+            }
+
+            speakInstruction() {
+                const text = document.getElementById('task-text').innerText;
+                AudioSys.speak(text);
+            }
+
+            useHint() {
+                if (this.hints > 0 && this.currentTarget) {
+                    this.hints--;
+                    this.updateHUD();
+                    
+                    // Highlight Item
+                    const itemEl = document.querySelector(`.item[data-id="${this.currentTarget.id}"]`);
+                    if(itemEl) itemEl.classList.add('highlight');
+
+                    // Highlight Basket
+                    const basketEl = document.querySelector(`.basket[data-cat-id="${this.currentTarget.catId}"]`);
+                    if(basketEl) basketEl.classList.add('highlight');
+
+                    setTimeout(() => {
+                        if(itemEl) itemEl.classList.remove('highlight');
+                        if(basketEl) basketEl.classList.remove('highlight');
+                    }, 1000);
+                }
+            }
+
+            updateHUD() {
+                document.getElementById('lvl-txt').innerText = this.level;
+                let h = "";
+                for(let i=0; i<3; i++) h += (i<this.hearts ? "❤️" : "🖤");
+                document.getElementById('hearts-display').innerText = h;
+                
+                const hb = document.getElementById('btn-hint');
+                hb.innerText = `💡 ${this.hints}`;
+                if(this.hints===0) hb.style.opacity = 0.5;
+            }
+
+            completeLevel() {
+                document.getElementById('game-ui').classList.add('hidden');
+                document.getElementById('win-screen').classList.remove('hidden');
+                AudioSys.correct();
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            }
+
+            nextLevel() {
+                if (this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    document.getElementById('game-ui').classList.remove('hidden');
+                    this.startLevel();
+                } else {
+                    document.getElementById('win-msg').innerText = "All Levels Done!";
+                }
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                this.startLevel();
+            }
+
+            gameOver() {
+                document.getElementById('game-ui').classList.add('hidden');
+                document.getElementById('lose-screen').classList.remove('hidden');
+            }
+
+            goHome() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+
+        // Prevent Pull-to-refresh
+        document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    </script>
+</body>
+</html>
