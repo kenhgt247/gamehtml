@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bubble Pop Words</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #E0F7FA;
+            --primary: #FF8A65;
+            --accent: #4DB6AC;
+            --text: #37474F;
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #E0F7FA 0%, #FCE4EC 100%);
+            font-family: var(--font-main);
+            color: var(--text);
+        }
+
+        /* --- UI Overlay --- */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .header-bar {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid rgba(0,0,0,0.05);
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+        }
+
+        .stat-box {
+            font-size: 1.2rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .hearts { color: #e57373; letter-spacing: 2px; }
+
+        /* --- Target Word Display --- */
+        #target-display {
+            background: #FFF;
+            margin: 10px auto;
+            padding: 10px 30px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+            pointer-events: auto;
+            border: 2px solid var(--accent);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+        #target-word { font-size: 2rem; font-weight: 900; color: var(--primary); text-transform: uppercase; }
+        .speaker-btn {
+            background: var(--accent); color: white; border: none;
+            width: 40px; height: 40px; border-radius: 50%;
+            font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s;
+        }
+        .speaker-btn:active { transform: scale(0.9); }
+
+        /* --- Hint Button --- */
+        #hint-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: #FFD54F;
+            border: 4px solid #FFCA28;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            font-size: 2rem;
+            cursor: pointer;
+            pointer-events: auto;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: 0 4px 0 #FFB300;
+            transition: all 0.2s;
+        }
+        #hint-btn:active { transform: translateY(4px); box-shadow: none; }
+        #hint-count { font-size: 0.8rem; font-weight: bold; color: #5D4037; margin-top: -5px; }
+
+        /* --- Game Area --- */
+        #game-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .bubble {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.4));
+            box-shadow: inset 0 0 20px rgba(255,255,255,0.5), 0 5px 15px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+            will-change: top;
+        }
+        .bubble:active { transform: scale(0.95); }
+        
+        /* Shine effect on bubble */
+        .bubble::after {
+            content: ''; position: absolute; top: 15%; left: 20%;
+            width: 20%; height: 10%; border-radius: 50%;
+            background: rgba(255,255,255,0.8); transform: rotate(-45deg);
+        }
+
+        .b-emoji { font-size: 2.5rem; line-height: 1; }
+        .b-word { font-size: 1rem; font-weight: bold; color: #555; margin-top: 5px; text-shadow: 1px 1px 0 rgba(255,255,255,0.8); }
+
+        .bubble.highlight {
+            border: 4px solid #FFEB3B;
+            box-shadow: 0 0 30px #FFEB3B;
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* --- Screens --- */
+        .screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.95);
+            z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+            transition: opacity 0.3s;
+        }
+        .hidden { opacity: 0; pointer-events: none; z-index: -1; }
+
+        h1 { font-size: 3rem; color: var(--primary); margin-bottom: 10px; text-shadow: 2px 2px 0px #FFF3E0; }
+        h2 { font-size: 2rem; color: var(--accent); margin: 10px 0; }
+        
+        .btn {
+            background: var(--accent); color: white;
+            border: none; padding: 15px 40px;
+            font-size: 1.5rem; border-radius: 50px;
+            cursor: pointer; font-family: inherit; font-weight: bold;
+            box-shadow: 0 6px 0 #00897B;
+            transition: transform 0.1s;
+            margin: 10px;
+        }
+        .btn:active { transform: translateY(6px); box-shadow: none; }
+        .btn.secondary { background: #FF7043; box-shadow: 0 6px 0 #D84315; }
+
+        #timer-bar {
+            position: absolute; bottom: 0; left: 0; height: 8px; background: #FFD54F;
+            width: 100%; transition: width 1s linear;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1>Bubble Pop Words</h1>
+        <div style="font-size: 4rem; margin: 20px;">🎈🍎🐶</div>
+        <p style="font-size: 1.2rem; color: #666; max-width: 80%;">Listen to the word and pop the correct bubble!</p>
+        <button class="btn" onclick="game.start()">PLAY GAME ▶</button>
+    </div>
+
+    <div id="game-over-screen" class="screen hidden">
+        <h1 style="color: #e57373">Game Over!</h1>
+        <div style="font-size: 4rem;">😢</div>
+        <h2 id="final-score">Score: 0</h2>
+        <button class="btn" onclick="game.restartLevel()">Try Again ↺</button>
+        <button class="btn secondary" onclick="game.goHome()">Home 🏠</button>
+    </div>
+
+    <div id="level-complete-screen" class="screen hidden">
+        <h1 style="color: #81C784">Level Complete!</h1>
+        <div style="font-size: 4rem;">🎉</div>
+        <p id="praise-text" style="font-size: 1.5rem; font-weight: bold; color: var(--primary)">Awesome!</p>
+        <button class="btn" onclick="game.nextLevel()">Next Level ▶</button>
+    </div>
+
+    <div id="ui-layer" class="hidden">
+        <div class="header-bar">
+            <button class="speaker-btn" style="background:#ddd; color:#555; width:35px; height:35px;" onclick="game.goHome()">🏠</button>
+            <div class="stat-box">Level: <span id="level-display">1</span></div>
+            <div class="stat-box hearts" id="hearts-display">❤️❤️❤️</div>
+            <div class="stat-box" style="color: var(--accent)">Score: <span id="score-display">0</span></div>
+        </div>
+
+        <div style="text-align: center;">
+            <div id="target-display">
+                <span id="target-word">APPLE</span>
+                <button class="speaker-btn" onclick="game.speakTarget()">🔊</button>
+            </div>
+        </div>
+
+        <button id="hint-btn" onclick="game.useHint()">
+            💡 <span id="hint-count">3</span>
+        </button>
+        <div id="timer-bar"></div>
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+        // --- DATA ---
+        const WORDS_DB = [
+            // Fruits
+            { word: "APPLE", emoji: "🍎", cat: "fruit" },
+            { word: "BANANA", emoji: "🍌", cat: "fruit" },
+            { word: "GRAPE", emoji: "🍇", cat: "fruit" },
+            { word: "ORANGE", emoji: "🍊", cat: "fruit" },
+            { word: "LEMON", emoji: "🍋", cat: "fruit" },
+            { word: "PEACH", emoji: "🍑", cat: "fruit" },
+            { word: "CHERRY", emoji: "🍒", cat: "fruit" },
+            { word: "MELON", emoji: "🍈", cat: "fruit" },
+            { word: "BERRY", emoji: "🍓", cat: "fruit" },
+            { word: "PEAR", emoji: "🍐", cat: "fruit" },
+            // Animals
+            { word: "DOG", emoji: "🐶", cat: "animal" },
+            { word: "CAT", emoji: "🐱", cat: "animal" },
+            { word: "MOUSE", emoji: "🐭", cat: "animal" },
+            { word: "LION", emoji: "🦁", cat: "animal" },
+            { word: "TIGER", emoji: "🐯", cat: "animal" },
+            { word: "BEAR", emoji: "🐻", cat: "animal" },
+            { word: "PIG", emoji: "🐷", cat: "animal" },
+            { word: "COW", emoji: "🐮", cat: "animal" },
+            { word: "FROG", emoji: "🐸", cat: "animal" },
+            { word: "DUCK", emoji: "🦆", cat: "animal" },
+            { word: "BIRD", emoji: "🐦", cat: "animal" },
+            { word: "BEE", emoji: "🐝", cat: "animal" },
+            { word: "FISH", emoji: "🐠", cat: "animal" },
+            { word: "MONKEY", emoji: "🐵", cat: "animal" },
+            { word: "PANDA", emoji: "🐼", cat: "animal" },
+            // Toys & Objects
+            { word: "BALL", emoji: "⚽", cat: "toy" },
+            { word: "CAR", emoji: "🚗", cat: "toy" },
+            { word: "DOLL", emoji: "🎎", cat: "toy" },
+            { word: "BEAR", emoji: "🧸", cat: "toy" },
+            { word: "KITE", emoji: "🪁", cat: "toy" },
+            { word: "ROBOT", emoji: "🤖", cat: "toy" },
+            { word: "BOOK", emoji: "📖", cat: "obj" },
+            { word: "PEN", emoji: "🖊️", cat: "obj" },
+            { word: "CUP", emoji: "☕", cat: "obj" },
+            { word: "GIFT", emoji: "🎁", cat: "obj" },
+            // Colors / Nature
+            { word: "RED", emoji: "🔴", cat: "color" },
+            { word: "BLUE", emoji: "🔵", cat: "color" },
+            { word: "GREEN", emoji: "🟢", cat: "color" },
+            { word: "YELLOW", emoji: "🟡", cat: "color" },
+            { word: "SUN", emoji: "☀️", cat: "nature" },
+            { word: "MOON", emoji: "🌙", cat: "nature" },
+            { word: "STAR", emoji: "⭐", cat: "nature" },
+            { word: "FLOWER", emoji: "🌸", cat: "nature" },
+            { word: "TREE", emoji: "🌳", cat: "nature" },
+            { word: "FIRE", emoji: "🔥", cat: "nature" }
+        ];
+
+        // --- AUDIO CONTROLLER ---
+        class AudioController {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.synth = window.speechSynthesis;
+            }
+
+            playTone(freq, type, duration) {
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            playCorrect() {
+                this.playTone(600, 'sine', 0.1);
+                setTimeout(() => this.playTone(800, 'sine', 0.2), 100);
+            }
+
+            playWrong() {
+                this.playTone(150, 'sawtooth', 0.3);
+            }
+
+            speak(text) {
+                if (this.synth.speaking) this.synth.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.1; // Slightly higher pitch for kids
+                this.synth.speak(utterance);
+            }
+        }
+
+        // --- BUBBLE CLASS ---
+        class Bubble {
+            constructor(data, speed, onClick) {
+                this.data = data;
+                this.speed = speed;
+                this.element = document.createElement('div');
+                this.element.className = 'bubble';
+                this.element.innerHTML = `
+                    <div class="b-emoji">${data.emoji}</div>
+                    <div class="b-word">${data.word}</div>
+                `;
+                
+                // Random position & size
+                const size = 80 + Math.random() * 40; // 80-120px
+                this.element.style.width = `${size}px`;
+                this.element.style.height = `${size}px`;
+                
+                const maxLeft = window.innerWidth - size;
+                this.x = Math.random() * maxLeft;
+                this.y = window.innerHeight + size; // Start below screen
+                
+                this.element.style.left = `${this.x}px`;
+                this.element.style.top = `${this.y}px`;
+                
+                this.element.addEventListener('pointerdown', () => onClick(this)); // Use pointerdown for instant reaction
+                
+                document.getElementById('game-container').appendChild(this.element);
+                
+                // Wobble effect
+                this.wobbleOffset = Math.random() * Math.PI * 2;
+                this.wobbleSpeed = 0.02 + Math.random() * 0.03;
+            }
+
+            update() {
+                this.y -= this.speed;
+                const wobble = Math.sin(Date.now() * 0.005 + this.wobbleOffset) * 1; 
+                this.element.style.top = `${this.y}px`;
+                this.element.style.transform = `translateX(${wobble}px)`;
+
+                // Remove if off screen top
+                if (this.y < -150) {
+                    this.remove();
+                    return false; // Dead
+                }
+                return true; // Alive
+            }
+
+            highlight() {
+                this.element.classList.add('highlight');
+                setTimeout(() => this.element.classList.remove('highlight'), 1000);
+            }
+
+            pop() {
+                this.element.style.transform = 'scale(1.5) opacity(0)';
+                this.element.style.transition = 'all 0.2s';
+                setTimeout(() => this.remove(), 200);
+            }
+
+            shake() {
+                this.element.style.animation = 'shake 0.4s';
+                this.element.style.background = 'radial-gradient(circle, #ffcdd2, #e57373)';
+                setTimeout(() => {
+                    if (this.element) {
+                        this.element.style.animation = '';
+                        this.element.style.background = '';
+                    }
+                }, 400);
+            }
+
+            remove() {
+                if (this.element && this.element.parentNode) {
+                    this.element.parentNode.removeChild(this.element);
+                }
+            }
+        }
+
+        // --- GAME LOGIC ---
+        class Game {
+            constructor() {
+                this.audio = new AudioController();
+                this.level = 1;
+                this.score = 0;
+                this.hearts = 3;
+                this.hints = 3;
+                this.isPlaying = false;
+                this.bubbles = [];
+                this.targetWord = null;
+                this.levelDuration = 0;
+                this.timerInterval = null;
+                this.spawnInterval = null;
+                this.loopId = null;
+                this.lastTargetSpawnTime = 0;
+            }
+
+            start() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('ui-layer').classList.remove('hidden');
+                this.audio.ctx.resume(); // Ensure audio context is ready
+                this.startLevel(1);
+            }
+
+            startLevel(lvl) {
+                this.level = lvl;
+                this.hearts = 3;
+                this.hints = 3;
+                this.bubbles.forEach(b => b.remove());
+                this.bubbles = [];
+                this.isPlaying = true;
+
+                // Level Config
+                // Speed increases with level: 1.5 -> 4.5
+                const baseSpeed = 1.5 + (this.level * 0.3);
+                const spawnRate = Math.max(800, 2000 - (this.level * 100)); // Spawn faster
+                const duration = Math.min(45, 20 + (this.level * 2)); // 22s to 45s
+
+                this.levelDuration = duration;
+                
+                // UI Updates
+                document.getElementById('level-display').innerText = this.level;
+                document.getElementById('score-display').innerText = this.score;
+                this.updateHearts();
+                this.updateHintUI();
+                
+                // Timer
+                const timerBar = document.getElementById('timer-bar');
+                timerBar.style.width = '100%';
+                timerBar.style.transition = `width ${duration}s linear`;
+                // Force reflow
+                timerBar.offsetWidth; 
+                timerBar.style.width = '0%';
+
+                // Pick first word
+                this.pickNewTarget();
+
+                // Loops
+                this.spawnInterval = setInterval(() => this.spawnBubble(baseSpeed), spawnRate);
+                this.gameLoop();
+
+                // Level Timer
+                clearTimeout(this.levelTimer);
+                this.levelTimer = setTimeout(() => this.completeLevel(), duration * 1000);
+            }
+
+            pickNewTarget() {
+                const randomItem = WORDS_DB[Math.floor(Math.random() * WORDS_DB.length)];
+                this.targetWord = randomItem;
+                document.getElementById('target-word').innerText = randomItem.word;
+                this.speakTarget();
+            }
+
+            speakTarget() {
+                if (this.targetWord) this.audio.speak(this.targetWord.word);
+            }
+
+            spawnBubble(speed) {
+                if (!this.isPlaying) return;
+
+                let data;
+                const now = Date.now();
+                // Ensure target appears at least every 4 seconds
+                if (now - this.lastTargetSpawnTime > 4000) {
+                    data = this.targetWord;
+                    this.lastTargetSpawnTime = now;
+                } else {
+                    // Random probability (30% target, 70% random)
+                    if (Math.random() < 0.3) {
+                        data = this.targetWord;
+                        this.lastTargetSpawnTime = now;
+                    } else {
+                        // Pick random distractor
+                        data = WORDS_DB[Math.floor(Math.random() * WORDS_DB.length)];
+                        // Make sure distractor isn't target
+                        while(data.word === this.targetWord.word) {
+                            data = WORDS_DB[Math.floor(Math.random() * WORDS_DB.length)];
+                        }
+                    }
+                }
+
+                // Variable speed factor per bubble
+                const finalSpeed = speed * (0.8 + Math.random() * 0.4); 
+                const b = new Bubble(data, finalSpeed, (bubble) => this.handleBubbleClick(bubble));
+                this.bubbles.push(b);
+            }
+
+            handleBubbleClick(bubble) {
+                if (!this.isPlaying) return;
+
+                if (bubble.data.word === this.targetWord.word) {
+                    // Correct
+                    this.score += 10;
+                    document.getElementById('score-display').innerText = this.score;
+                    this.audio.playCorrect();
+                    bubble.pop();
+                    this.bubbles = this.bubbles.filter(b => b !== bubble);
+                    
+                    // Confetti
+                    const rect = bubble.element.getBoundingClientRect();
+                    const x = (rect.left + rect.width/2) / window.innerWidth;
+                    const y = (rect.top + rect.height/2) / window.innerHeight;
+                    confetti({ origin: { x, y }, particleCount: 30, spread: 50, colors: ['#FFEB3B', '#4DB6AC', '#FF8A65'] });
+
+                    // Pick new target immediately
+                    this.pickNewTarget();
+                } else {
+                    // Wrong
+                    this.hearts--;
+                    this.updateHearts();
+                    this.audio.playWrong();
+                    bubble.shake();
+                    this.audio.speak("Oops, try again");
+
+                    if (this.hearts <= 0) {
+                        this.gameOver();
+                    }
+                }
+            }
+
+            gameLoop() {
+                if (!this.isPlaying) return;
+                
+                // Update bubbles
+                this.bubbles = this.bubbles.filter(b => b.update());
+                
+                this.loopId = requestAnimationFrame(() => this.gameLoop());
+            }
+
+            useHint() {
+                if (this.hints > 0 && this.isPlaying) {
+                    // Find bubbles matching target
+                    const targets = this.bubbles.filter(b => b.data.word === this.targetWord.word);
+                    if (targets.length > 0) {
+                        this.hints--;
+                        this.updateHintUI();
+                        targets.forEach(b => b.highlight());
+                    } else {
+                        // If no target on screen, wait a tiny bit and try to force spawn one next tick (logic implicit in spawn timer)
+                    }
+                }
+            }
+
+            updateHearts() {
+                const hStr = "❤️".repeat(this.hearts) + "🖤".repeat(3 - this.hearts);
+                document.getElementById('hearts-display').innerText = hStr;
+            }
+
+            updateHintUI() {
+                document.getElementById('hint-count').innerText = this.hints;
+                document.getElementById('hint-btn').style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            completeLevel() {
+                this.stopEngine();
+                
+                const praises = ["Great Job!", "Fantastic!", "Super!", "Well Done!"];
+                const praise = praises[Math.floor(Math.random() * praises.length)];
+                document.getElementById('praise-text').innerText = praise;
+
+                document.getElementById('level-complete-screen').classList.remove('hidden');
+                this.audio.playCorrect();
+                confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
+            }
+
+            nextLevel() {
+                if (this.level < 10) {
+                    document.getElementById('level-complete-screen').classList.add('hidden');
+                    this.startLevel(this.level + 1);
+                } else {
+                    // Finished all levels (Loop or Congrats screen - reusing complete for simplicity)
+                    document.getElementById('praise-text').innerText = "YOU WON ALL LEVELS!";
+                    this.level = 1; // Loop back
+                    this.score = 0;
+                }
+            }
+
+            gameOver() {
+                this.stopEngine();
+                document.getElementById('final-score').innerText = "Score: " + this.score;
+                document.getElementById('game-over-screen').classList.remove('hidden');
+            }
+
+            restartLevel() {
+                document.getElementById('game-over-screen').classList.add('hidden');
+                // Reset score for fair play? Or keep cumulative? Let's keep cumulative but penalty applied via hearts
+                this.startLevel(this.level);
+            }
+
+            goHome() {
+                this.stopEngine();
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('ui-layer').classList.add('hidden');
+                document.getElementById('start-screen').classList.remove('hidden');
+                this.score = 0;
+            }
+
+            stopEngine() {
+                this.isPlaying = false;
+                clearInterval(this.spawnInterval);
+                clearTimeout(this.levelTimer);
+                cancelAnimationFrame(this.loopId);
+                this.bubbles.forEach(b => b.remove());
+                this.bubbles = [];
+            }
+        }
+
+        // Include CSS Keyframes for Shake
+        const styleSheet = document.createElement("style");
+        styleSheet.innerText = `
+            @keyframes shake {
+                0% { transform: translateX(0); }
+                25% { transform: translateX(-5px) rotate(-5deg); }
+                50% { transform: translateX(5px) rotate(5deg); }
+                75% { transform: translateX(-5px) rotate(-5deg); }
+                100% { transform: translateX(0); }
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        // Init Game
+        const game = new Game();
+
+        // Prevent zoom on double tap
+        document.addEventListener('dblclick', function(event) {
+            event.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
