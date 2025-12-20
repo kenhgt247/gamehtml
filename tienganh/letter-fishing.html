@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Letter Fishing</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --water-top: #81D4FA;
+            --water-bottom: #0277BD;
+            --ui-bg: rgba(255, 255, 255, 0.85);
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background: linear-gradient(180deg, var(--water-top) 0%, var(--water-bottom) 100%);
+            font-family: var(--font-main);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI OVERLAY --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 20; transition: opacity 0.3s;
+            pointer-events: none; /* Let clicks pass through to canvas when hidden */
+        }
+        .screen.active { background: rgba(255,255,255,0.9); pointer-events: auto; }
+        .hidden { opacity: 0; pointer-events: none; }
+
+        .btn {
+            background: #FF6F00; color: white; border: none; border-radius: 50px;
+            padding: 15px 40px; font-size: 1.5rem; font-weight: bold;
+            box-shadow: 0 6px 0 #E65100; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-small { padding: 8px 15px; font-size: 1rem; box-shadow: 0 3px 0 #E65100; }
+        .btn-home { background: #0277BD; box-shadow: 0 5px 0 #01579B; }
+
+        /* --- HUD --- */
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10; pointer-events: none;
+        }
+        .hud-group { 
+            display: flex; gap: 10px; align-items: center; 
+            background: var(--ui-bg); padding: 5px 15px; border-radius: 20px;
+            pointer-events: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .hearts { color: #F44336; font-size: 1.5rem; letter-spacing: 2px; }
+        .score { color: #0277BD; font-weight: bold; font-size: 1.2rem; }
+
+        /* --- INSTRUCTION BAR --- */
+        #task-bar {
+            position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+            background: #FFF; padding: 10px 30px; border-radius: 50px;
+            display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 10; pointer-events: auto;
+            border: 3px solid #FFCA28;
+        }
+        #target-letter { font-size: 2.5rem; font-weight: 900; color: #E91E63; }
+        .speak-btn {
+            background: #4DB6AC; border: none; border-radius: 50%; width: 45px; height: 45px;
+            font-size: 1.5rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 0 #009688;
+        }
+        .speak-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        /* --- HINT BUTTON --- */
+        #hint-btn {
+            position: absolute; bottom: 20px; right: 20px;
+            background: #FFD54F; width: 70px; height: 70px; border-radius: 50%;
+            border: 4px solid #FFC107; font-size: 2rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; pointer-events: auto; z-index: 10;
+            box-shadow: 0 4px 0 #FFA000;
+        }
+        #hint-btn:active { transform: translateY(4px); box-shadow: none; }
+        #hint-count { font-size: 0.9rem; font-weight: bold; color: #333; margin-top: -5px; }
+
+        /* --- CANVAS --- */
+        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+        
+        /* --- ANIMATIONS --- */
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+        .shake-screen { animation: shake 0.4s; }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen active">
+        <h1 style="color: #0277BD; font-size: 3rem; margin-bottom: 10px;">Letter Fishing</h1>
+        <div style="font-size: 5rem; margin-bottom: 20px;">🎣🐟🅰️</div>
+        <p style="font-size: 1.2rem;">Catch the letters!</p>
+        <button class="btn" onclick="game.start()">PLAY ▶</button>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-group">
+            <button class="btn btn-small btn-home" onclick="game.goHome()">🏠</button>
+            <span style="font-weight:bold">Lv.<span id="hud-level">1</span></span>
+        </div>
+        <div class="hud-group">
+            <span id="hearts-display" class="hearts">❤️❤️❤️</span>
+        </div>
+        <div class="hud-group">
+            <span class="score">Score: <span id="hud-score">0</span></span>
+        </div>
+    </div>
+
+    <div id="task-bar" class="hidden">
+        <span style="font-weight:bold; color:#555; font-size:1.2rem;">Catch: </span>
+        <span id="target-letter">A</span>
+        <button class="speak-btn" onclick="game.speakTarget()">🔊</button>
+    </div>
+
+    <button id="hint-btn" class="hidden" onclick="game.useHint()">
+        💡 <span id="hint-count">3</span>
+    </button>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="win-screen" class="screen">
+        <h1 style="color: #66BB6A">Great Job! 🎉</h1>
+        <div style="font-size: 4rem;">⭐🎣⭐</div>
+        <h2 id="win-msg">Level Complete!</h2>
+        <button class="btn" onclick="game.nextLevel()">Next Level ▶</button>
+    </div>
+
+    <div id="lose-screen" class="screen">
+        <h1 style="color: #EF5350">Oops! 😢</h1>
+        <p>Your line broke...</p>
+        <button class="btn" onclick="game.retryLevel()">Try Again ↺</button>
+        <button class="btn btn-home" onclick="game.goHome()">Home</button>
+    </div>
+
+    <script>
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + duration);
+            },
+            ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.2), 100); },
+            oops: function() { this.playTone(150, 'sawtooth', 0.4); },
+            splash: function() { this.playTone(300, 'triangle', 0.1); },
+            speak: function(text) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'en-US'; u.rate = 0.9;
+                window.speechSynthesis.speak(u);
+            }
+        };
+
+        // --- GAME LOGIC ---
+        class Fish {
+            constructor(letter, canvasW, canvasH, speed) {
+                this.letter = letter;
+                this.r = 35; // Radius
+                this.w = canvasW;
+                this.h = canvasH;
+                
+                // Spawn random position (avoid edges)
+                this.x = Math.random() * (this.w - 100) + 50;
+                this.y = Math.random() * (this.h - 300) + 200; // Keep lower part
+                
+                this.speedX = (Math.random() < 0.5 ? -1 : 1) * (speed + Math.random());
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.wobble = Math.random() * Math.PI * 2;
+                
+                // Visual
+                this.color = `hsl(${Math.random()*360}, 70%, 60%)`;
+                this.highlight = false;
+                this.scale = 1;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += Math.sin(this.wobble) * 0.5;
+                this.wobble += 0.05;
+
+                // Bounce off walls
+                if(this.x < this.r || this.x > this.w - this.r) {
+                    this.speedX *= -1;
+                    // Flip direction visual logic if needed
+                }
+                
+                // Keep within Y bounds
+                if(this.y < 150) this.y = 150;
+                if(this.y > this.h - 50) this.y = this.h - 50;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                if(this.speedX < 0) ctx.scale(-1, 1); // Face direction
+                
+                // Glow if highlighted
+                if(this.highlight) {
+                    ctx.shadowColor = "#FFF";
+                    ctx.shadowBlur = 20;
+                }
+
+                // Body (Bubble/Fish shape)
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.r, this.r * 0.8, 0, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Tail
+                ctx.beginPath();
+                ctx.moveTo(-this.r + 5, 0);
+                ctx.lineTo(-this.r - 15, -15);
+                ctx.lineTo(-this.r - 15, 15);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = "white";
+                ctx.beginPath(); ctx.arc(15, -10, 8, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "black";
+                ctx.beginPath(); ctx.arc(17, -10, 3, 0, Math.PI*2); ctx.fill();
+
+                // Restore orientation for Text
+                ctx.restore(); 
+
+                // Letter
+                ctx.fillStyle = "#FFF";
+                ctx.font = "bold 30px 'Comic Sans MS'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.shadowColor = "rgba(0,0,0,0.5)";
+                ctx.shadowBlur = 4;
+                ctx.fillText(this.letter, this.x, this.y + 2);
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.level = 1;
+                this.score = 0;
+                this.hearts = 3;
+                this.hints = 3;
+                this.items = [];
+                this.target = null;
+                this.hook = { x: 0, y: 0, active: false };
+                this.playing = false;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                // Input
+                this.canvas.addEventListener('pointerdown', (e) => this.handleInput(e));
+                this.canvas.addEventListener('pointermove', (e) => {
+                    if(this.playing) {
+                        const rect = this.canvas.getBoundingClientRect();
+                        this.hook.x = e.clientX - rect.left;
+                        // Hook y usually stays up until cast, but for simplicity let's have rod follow x
+                    }
+                });
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.remove('active');
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('hud').classList.remove('hidden');
+                document.getElementById('task-bar').classList.remove('hidden');
+                document.getElementById('hint-btn').classList.remove('hidden');
+                
+                this.level = 1;
+                this.score = 0;
+                AudioSys.init();
+                this.startLevel();
+                this.loop();
+            }
+
+            startLevel() {
+                this.hearts = 3;
+                this.hints = 3;
+                this.updateHUD();
+                
+                // Level Config
+                const count = Math.min(3 + this.level, 10);
+                const speed = 0.5 + (this.level * 0.2);
+                const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                
+                this.items = [];
+                for(let i=0; i<count; i++) {
+                    const char = alphabet[Math.floor(Math.random() * alphabet.length)];
+                    this.items.push(new Fish(char, this.canvas.width, this.canvas.height, speed));
+                }
+                
+                this.pickTarget();
+                this.playing = true;
+            }
+
+            pickTarget() {
+                if(this.items.length === 0) {
+                    this.completeLevel();
+                    return;
+                }
+                this.target = this.items[Math.floor(Math.random() * this.items.length)];
+                document.getElementById('target-letter').innerText = this.target.letter;
+                
+                setTimeout(() => this.speakTarget(), 600);
+            }
+
+            speakTarget() {
+                AudioSys.speak("Catch letter " + this.target.letter);
+            }
+
+            handleInput(e) {
+                if(!this.playing) return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                
+                this.hook.x = clickX;
+                this.hook.y = clickY;
+                this.hook.active = true;
+                
+                // Splash Effect
+                AudioSys.splash();
+                setTimeout(() => this.hook.active = false, 200);
+
+                // Check collision
+                let caught = null;
+                // Check items in reverse to catch top-most first
+                for(let i=this.items.length-1; i>=0; i--) {
+                    const f = this.items[i];
+                    const dist = Math.hypot(clickX - f.x, clickY - f.y);
+                    if(dist < f.r + 20) { // Hitbox slightly larger
+                        caught = f;
+                        break;
+                    }
+                }
+
+                if(caught) {
+                    if(caught === this.target) {
+                        // Correct
+                        AudioSys.ding();
+                        this.score += 10;
+                        confetti({ origin: { x: clickX/window.innerWidth, y: clickY/window.innerHeight }, particleCount: 30, spread: 50 });
+                        
+                        // Remove fish
+                        this.items = this.items.filter(i => i !== caught);
+                        this.updateHUD();
+                        this.pickTarget();
+                    } else {
+                        // Wrong
+                        AudioSys.oops();
+                        this.hearts--;
+                        document.body.classList.add('shake-screen');
+                        setTimeout(()=>document.body.classList.remove('shake-screen'), 400);
+                        this.updateHUD();
+                        
+                        if(this.hearts <= 0) {
+                            setTimeout(() => this.gameOver(), 500);
+                        }
+                    }
+                }
+            }
+
+            loop() {
+                if(!this.playing) return;
+                
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw Line (Rod is virtual at top)
+                if(this.hook.x > 0) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.hook.x, 0); // Rod tip
+                    // If clicking, line goes to click, else it dangles short
+                    const lineY = this.hook.active ? this.hook.y : 100 + Math.sin(Date.now()*0.005)*10;
+                    this.ctx.lineTo(this.hook.x, lineY);
+                    this.ctx.strokeStyle = "#FFF";
+                    this.ctx.lineWidth = 2;
+                    this.ctx.stroke();
+
+                    // Draw Hook
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.hook.x, lineY, 10, 0, Math.PI, false);
+                    this.ctx.stroke();
+                }
+
+                // Update & Draw Fish
+                this.items.forEach(f => {
+                    f.update();
+                    f.draw(this.ctx);
+                });
+
+                requestAnimationFrame(() => this.loop());
+            }
+
+            useHint() {
+                if(this.hints > 0 && this.target) {
+                    this.hints--;
+                    this.updateHUD();
+                    this.target.highlight = true;
+                    setTimeout(() => this.target.highlight = false, 2000);
+                }
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level;
+                document.getElementById('hud-score').innerText = this.score;
+                let h = ""; for(let i=0; i<3; i++) h += i<this.hearts ? "❤️" : "🖤";
+                document.getElementById('hearts-display').innerText = h;
+                
+                const hb = document.getElementById('hint-btn');
+                document.getElementById('hint-count').innerText = this.hints;
+                hb.style.opacity = this.hints > 0 ? 1 : 0.5;
+            }
+
+            completeLevel() {
+                this.playing = false;
+                document.getElementById('win-screen').classList.remove('hidden');
+                document.getElementById('win-screen').classList.add('active');
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            }
+
+            gameOver() {
+                this.playing = false;
+                document.getElementById('lose-screen').classList.remove('hidden');
+                document.getElementById('lose-screen').classList.add('active');
+            }
+
+            nextLevel() {
+                if(this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.remove('active');
+                    document.getElementById('win-screen').classList.add('hidden');
+                    this.startLevel();
+                    this.loop();
+                } else {
+                    document.getElementById('win-msg').innerText = "All Levels Completed!";
+                }
+            }
+
+            retryLevel() {
+                document.getElementById('lose-screen').classList.remove('active');
+                document.getElementById('lose-screen').classList.add('hidden');
+                this.startLevel();
+                this.loop();
+            }
+
+            goHome() {
+                this.playing = false;
+                document.querySelectorAll('.screen').forEach(s => {
+                    s.classList.remove('active');
+                    if(s.id !== 'start-screen') s.classList.add('hidden');
+                });
+                document.getElementById('hud').classList.add('hidden');
+                document.getElementById('task-bar').classList.add('hidden');
+                document.getElementById('hint-btn').classList.add('hidden');
+                document.getElementById('start-screen').classList.remove('hidden');
+                document.getElementById('start-screen').classList.add('active');
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>
