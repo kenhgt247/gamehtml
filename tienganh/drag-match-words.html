@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Drag & Match Words</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #FFF8E1;
+            --primary: #FF6F00;
+            --secondary: #0288D1;
+            --accent: #E91E63;
+            --text: #37474F;
+            --card-word: #FFCC80;
+            --card-icon: #B3E5FC;
+            --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+
+        body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
+            background-color: var(--bg-color);
+            font-family: var(--font-main);
+            color: var(--text);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- UI UTILS --- */
+        .hidden { display: none !important; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--bg-color); z-index: 10; padding: 20px;
+        }
+
+        .btn {
+            background: var(--primary); color: white; border: none; border-radius: 50px;
+            padding: 12px 30px; font-size: 1.2rem; font-weight: bold;
+            box-shadow: 0 5px 0 #E65100; cursor: pointer; margin: 10px;
+            font-family: inherit; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-small { padding: 8px 16px; font-size: 1rem; box-shadow: 0 3px 0 #E65100; }
+        .btn-secondary { background: var(--secondary); box-shadow: 0 5px 0 #01579B; }
+
+        /* --- HEADER --- */
+        #header {
+            height: 60px; width: 100%; background: #FFF;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 5;
+        }
+        .stat-box { font-weight: bold; font-size: 1.1rem; display: flex; gap: 10px; align-items: center;}
+        
+        /* --- GAME AREA --- */
+        #game-area {
+            flex: 1; width: 100%; max-width: 800px; margin: 0 auto;
+            display: flex; justify-content: space-between; padding: 20px;
+            position: relative;
+        }
+
+        .column {
+            display: flex; flex-direction: column; gap: 15px;
+            width: 45%; justify-content: center;
+        }
+
+        .card {
+            background: #FFF; border-radius: 12px;
+            height: 70px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+            position: relative; z-index: 1;
+        }
+        
+        /* Draggable (Left) */
+        .card.word {
+            background: var(--card-word); font-size: 1.2rem; color: #5D4037;
+            cursor: grab; touch-action: none; /* Crucial for drag */
+        }
+        .card.word:active { cursor: grabbing; }
+        .card.word.matched {
+            background: #C8E6C9; color: #2E7D32; pointer-events: none;
+            box-shadow: none; border: 2px solid #4CAF50; opacity: 0.7;
+        }
+
+        /* Dropzone (Right) */
+        .card.icon {
+            background: var(--card-icon); font-size: 2.5rem;
+            border: 2px dashed #81D4FA;
+        }
+        .card.icon.matched {
+            background: #C8E6C9; border: 2px solid #4CAF50; opacity: 0.7;
+        }
+        .card.icon.highlight {
+            border: 3px solid var(--accent); background: #FFECB3;
+            transform: scale(1.05); transition: 0.2s;
+        }
+
+        /* Dragging State */
+        .card.dragging {
+            z-index: 100; opacity: 0.9;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            transform: scale(1.1);
+        }
+
+        /* Hint Animation */
+        @keyframes hintPulse {
+            0% { transform: scale(1); border-color: transparent; }
+            50% { transform: scale(1.05); border-color: var(--accent); border-width: 3px; border-style: solid; }
+            100% { transform: scale(1); border-color: transparent; }
+        }
+        .hint-anim { animation: hintPulse 1s ease-in-out infinite; }
+
+        /* Progress Bar */
+        #progress-container {
+            width: 100%; height: 8px; background: #eee;
+            position: absolute; bottom: 0; left: 0;
+        }
+        #progress-fill {
+            height: 100%; background: var(--secondary); width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Modal Content */
+        .title-emoji { font-size: 4rem; margin-bottom: 20px; }
+        h1 { color: var(--primary); margin: 0; text-shadow: 2px 2px 0 #FFF; }
+        
+        /* Responsive Text */
+        @media (max-width: 400px) {
+            .card.word { font-size: 1rem; }
+            .card.icon { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen">
+        <h1>Drag & Match</h1>
+        <div class="title-emoji">🖐️🧩🐶</div>
+        <p>Drag the words to the pictures!</p>
+        <button class="btn" onclick="game.start()">PLAY GAME ▶</button>
+    </div>
+
+    <div id="game-screen" class="screen hidden" style="justify-content: flex-start; padding: 0;">
+        <div id="header">
+            <div class="stat-box">
+                <button class="btn btn-small btn-secondary" onclick="game.showHome()">🏠</button>
+                <span>Lv.<span id="hud-level">1</span></span>
+            </div>
+            <div class="stat-box">
+                <span>Score: <span id="hud-score">0</span></span>
+                <button class="btn btn-small" onclick="game.useHint()" id="btn-hint">💡 3</button>
+            </div>
+        </div>
+
+        <div id="game-area">
+            <div class="column" id="col-words">
+                </div>
+            <div class="column" id="col-icons">
+                </div>
+        </div>
+        
+        <div id="progress-container"><div id="progress-fill"></div></div>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+        <h1 style="color: #4CAF50;">Good Job! 🎉</h1>
+        <div class="title-emoji">⭐🦁🚀</div>
+        <h2 id="win-msg">Level Complete!</h2>
+        <button class="btn" onclick="game.nextLevel()">Next Level ▶</button>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const WORDS_DB = [
+            // Animals
+            {id:1, w:"DOG", i:"🐶"}, {id:2, w:"CAT", i:"🐱"}, {id:3, w:"MOUSE", i:"🐭"},
+            {id:4, w:"LION", i:"🦁"}, {id:5, w:"TIGER", i:"🐯"}, {id:6, w:"COW", i:"🐮"},
+            {id:7, w:"PIG", i:"🐷"}, {id:8, w:"FROG", i:"🐸"}, {id:9, w:"MONKEY", i:"🐵"},
+            {id:10, w:"BEAR", i:"🐻"}, {id:11, w:"PANDA", i:"🐼"}, {id:12, w:"FISH", i:"🐠"},
+            // Food
+            {id:13, w:"APPLE", i:"🍎"}, {id:14, w:"BANANA", i:"🍌"}, {id:15, w:"GRAPE", i:"🍇"},
+            {id:16, w:"PIZZA", i:"🍕"}, {id:17, w:"BURGER", i:"🍔"}, {id:18, w:"CAKE", i:"🍰"},
+            {id:19, w:"EGG", i:"🍳"}, {id:20, w:"ICE CREAM", i:"🍦"}, {id:21, w:"CANDY", i:"🍬"},
+            // Transport
+            {id:22, w:"CAR", i:"🚗"}, {id:23, w:"BUS", i:"🚌"}, {id:24, w:"PLANE", i:"✈️"},
+            {id:25, w:"SHIP", i:"🚢"}, {id:26, w:"BIKE", i:"🚲"}, {id:27, w:"ROCKET", i:"🚀"},
+            // Nature
+            {id:28, w:"SUN", i:"☀️"}, {id:29, w:"MOON", i:"🌙"}, {id:30, w:"STAR", i:"⭐"},
+            {id:31, w:"FLOWER", i:"🌸"}, {id:32, w:"TREE", i:"🌳"}, {id:33, w:"FIRE", i:"🔥"},
+            // Objects
+            {id:34, w:"BOOK", i:"📖"}, {id:35, w:"PEN", i:"🖊️"}, {id:36, w:"BALL", i:"⚽"},
+            {id:37, w:"PHONE", i:"📱"}, {id:38, w:"TV", i:"📺"}, {id:39, w:"GIFT", i:"🎁"},
+            // Body
+            {id:40, w:"EYE", i:"👁️"}, {id:41, w:"EAR", i:"👂"}, {id:42, w:"NOSE", i:"👃"},
+            {id:43, w:"HAND", i:"✋"}, {id:44, w:"FOOT", i:"🦶"}, {id:45, w:"MOUTH", i:"👄"},
+            // Clothes
+            {id:46, w:"SHIRT", i:"👕"}, {id:47, w:"DRESS", i:"👗"}, {id:48, w:"SHOE", i:"👟"},
+            {id:49, w:"HAT", i:"🧢"}, {id:50, w:"GLASSES", i:"👓"}, {id:51, w:"SOCK", i:"🧦"},
+            // More Animals
+            {id:52, w:"CHICKEN", i:"🐔"}, {id:53, w:"DUCK", i:"🦆"}, {id:54, w:"BEE", i:"🐝"},
+            {id:55, w:"SNAKE", i:"🐍"}, {id:56, w:"WHALE", i:"🐳"}, {id:57, w:"OCTOPUS", i:"🐙"},
+            // More Food
+            {id:58, w:"COOKIE", i:"🍪"}, {id:59, w:"DONUT", i:"🍩"}, {id:60, w:"FRIES", i:"🍟"},
+            {id:61, w:"WATER", i:"💧"}, {id:62, w:"MILK", i:"🥛"}, {id:63, w:"BREAD", i:"🍞"},
+            // More Objects
+            {id:64, w:"KEY", i:"🔑"}, {id:65, w:"LOCK", i:"🔒"}, {id:66, w:"BELL", i:"🔔"},
+            {id:67, w:"BALLOON", i:"🎈"}, {id:68, w:"CLOCK", i:"⏰"}, {id:69, w:"CAMERA", i:"📷"},
+            // Colors (as hearts/circles)
+            {id:70, w:"RED", i:"🔴"}, {id:71, w:"BLUE", i:"🔵"}, {id:72, w:"GREEN", i:"🟢"},
+            {id:73, w:"YELLOW", i:"🟡"}, {id:74, w:"ORANGE", i:"🟠"}, {id:75, w:"BLACK", i:"⚫"},
+            // Weather
+            {id:76, w:"RAIN", i:"🌧️"}, {id:77, w:"SNOW", i:"❄️"}, {id:78, w:"CLOUD", i:"☁️"},
+            {id:79, w:"WIND", i:"💨"}, {id:80, w:"UMBRELLA", i:"☂️"}
+        ];
+
+        // --- AUDIO ENGINE ---
+        const AudioSys = {
+            ctx: null,
+            init: function() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            playTone: function(freq, type, duration) {
+                if (!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            playCorrect: function() {
+                this.playTone(600, 'sine', 0.1);
+                setTimeout(() => this.playTone(800, 'sine', 0.2), 100);
+            },
+            playWrong: function() {
+                this.playTone(150, 'sawtooth', 0.3);
+            }
+        };
+
+        // --- GAME LOGIC ---
+        class Game {
+            constructor() {
+                this.level = 1;
+                this.score = 0;
+                this.pairsCount = 0;
+                this.matchedCount = 0;
+                this.hints = 3;
+                this.currentPairs = [];
+                
+                // Drag State
+                this.dragEl = null;
+                this.startX = 0;
+                this.startY = 0;
+                this.initialLeft = 0;
+                this.initialTop = 0;
+            }
+
+            start() {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                this.score = 0;
+                this.level = 1;
+                AudioSys.init();
+                this.startLevel();
+            }
+
+            startLevel() {
+                this.matchedCount = 0;
+                this.hints = 3;
+                this.updateHUD();
+                
+                // Difficulty Logic
+                let count = 3;
+                if(this.level > 3) count = 4;
+                if(this.level > 6) count = 5;
+                if(this.level > 8) count = 6;
+                
+                this.pairsCount = count;
+                this.updateProgress(0);
+
+                // Select Data
+                const shuffled = [...WORDS_DB].sort(() => 0.5 - Math.random());
+                this.currentPairs = shuffled.slice(0, count);
+
+                this.renderBoard();
+            }
+
+            renderBoard() {
+                const colWords = document.getElementById('col-words');
+                const colIcons = document.getElementById('col-icons');
+                colWords.innerHTML = '';
+                colIcons.innerHTML = '';
+
+                // Create Words (Left)
+                const words = [...this.currentPairs].sort(() => 0.5 - Math.random());
+                words.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'card word';
+                    el.innerText = item.w;
+                    el.dataset.id = item.id;
+                    // Setup Drag
+                    this.setupDrag(el);
+                    colWords.appendChild(el);
+                });
+
+                // Create Icons (Right)
+                const icons = [...this.currentPairs].sort(() => 0.5 - Math.random());
+                icons.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'card icon';
+                    el.innerText = item.i;
+                    el.dataset.id = item.id;
+                    colIcons.appendChild(el);
+                });
+            }
+
+            // --- DRAG & DROP LOGIC (Pointer Events) ---
+            setupDrag(el) {
+                el.onpointerdown = (e) => {
+                    if(el.classList.contains('matched')) return;
+                    el.setPointerCapture(e.pointerId);
+                    
+                    this.dragEl = el;
+                    this.startX = e.clientX;
+                    this.startY = e.clientY;
+                    
+                    // Get current visual position relative to viewport needed for transform
+                    const rect = el.getBoundingClientRect();
+                    // We don't move the element in DOM, we just Transform it
+                    
+                    el.classList.add('dragging');
+                };
+
+                el.onpointermove = (e) => {
+                    if(!this.dragEl) return;
+                    e.preventDefault();
+                    
+                    const dx = e.clientX - this.startX;
+                    const dy = e.clientY - this.startY;
+                    
+                    this.dragEl.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`;
+                };
+
+                el.onpointerup = (e) => {
+                    if(!this.dragEl) return;
+                    this.dragEl.releasePointerCapture(e.pointerId);
+                    
+                    // Check collision
+                    const dropTarget = this.checkCollision(e.clientX, e.clientY);
+                    
+                    if(dropTarget) {
+                        this.handleMatchAttempt(this.dragEl, dropTarget);
+                    } else {
+                        // Revert
+                        this.dragEl.style.transition = 'transform 0.3s ease';
+                        this.dragEl.style.transform = 'translate(0,0)';
+                        const elToReset = this.dragEl;
+                        setTimeout(() => { 
+                            elToReset.style.transition = ''; 
+                            elToReset.classList.remove('dragging');
+                        }, 300);
+                    }
+                    
+                    this.dragEl = null;
+                };
+            }
+
+            checkCollision(x, y) {
+                // Hide drag element momentarily to check what's underneath
+                this.dragEl.style.visibility = 'hidden';
+                const elemBelow = document.elementFromPoint(x, y);
+                this.dragEl.style.visibility = 'visible';
+
+                if(!elemBelow) return null;
+                return elemBelow.closest('.card.icon');
+            }
+
+            handleMatchAttempt(dragEl, dropEl) {
+                const dragId = parseInt(dragEl.dataset.id);
+                const dropId = parseInt(dropEl.dataset.id);
+
+                if (dragId === dropId) {
+                    // Correct
+                    AudioSys.playCorrect();
+                    dragEl.classList.remove('dragging');
+                    dragEl.classList.add('matched');
+                    dropEl.classList.add('matched');
+                    
+                    // Reset transform but keep it visually distinguishable
+                    dragEl.style.transform = 'translate(0,0)'; 
+                    // Optional: Animate item flying to target? 
+                    // For now, simpler: just lock both.
+                    
+                    dragEl.innerText = "✓";
+                    
+                    this.score += 10;
+                    this.matchedCount++;
+                    this.updateHUD();
+                    this.updateProgress(this.matchedCount / this.pairsCount * 100);
+
+                    // Confetti near target
+                    const rect = dropEl.getBoundingClientRect();
+                    const cx = (rect.left + rect.width/2) / window.innerWidth;
+                    const cy = (rect.top + rect.height/2) / window.innerHeight;
+                    confetti({ particleCount: 30, spread: 50, origin: { x: cx, y: cy } });
+
+                    if(this.matchedCount === this.pairsCount) {
+                        setTimeout(() => this.completeLevel(), 1000);
+                    }
+                } else {
+                    // Wrong
+                    AudioSys.playWrong();
+                    dropEl.style.animation = 'hintPulse 0.4s';
+                    setTimeout(() => dropEl.style.animation = '', 400);
+
+                    // Revert drag
+                    dragEl.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    dragEl.style.transform = 'translate(0,0)';
+                    setTimeout(() => { 
+                        dragEl.style.transition = ''; 
+                        dragEl.classList.remove('dragging');
+                    }, 500);
+                }
+            }
+
+            // --- FEATURES ---
+            useHint() {
+                if(this.hints <= 0) return;
+                
+                // Find unmatched pair
+                const unmatched = this.currentPairs.filter(p => {
+                    const el = document.querySelector(`.card.word[data-id="${p.id}"]`);
+                    return !el.classList.contains('matched');
+                });
+
+                if(unmatched.length === 0) return;
+                
+                this.hints--;
+                this.updateHUD();
+                
+                const target = unmatched[0];
+                const wEl = document.querySelector(`.card.word[data-id="${target.id}"]`);
+                const iEl = document.querySelector(`.card.icon[data-id="${target.id}"]`);
+                
+                wEl.classList.add('hint-anim');
+                iEl.classList.add('hint-anim');
+                
+                setTimeout(() => {
+                    wEl.classList.remove('hint-anim');
+                    iEl.classList.remove('hint-anim');
+                }, 1000);
+            }
+
+            updateHUD() {
+                document.getElementById('hud-level').innerText = this.level;
+                document.getElementById('hud-score').innerText = this.score;
+                const btn = document.getElementById('btn-hint');
+                btn.innerText = `💡 ${this.hints}`;
+                if(this.hints === 0) btn.style.opacity = 0.5;
+            }
+
+            updateProgress(pct) {
+                document.getElementById('progress-fill').style.width = `${pct}%`;
+            }
+
+            completeLevel() {
+                if(this.level === 10) {
+                    document.getElementById('win-msg').innerText = "All Levels Completed!";
+                } else {
+                    document.getElementById('win-msg').innerText = "Level Complete!";
+                }
+                document.getElementById('game-screen').classList.add('hidden');
+                document.getElementById('win-screen').classList.remove('hidden');
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+            }
+
+            nextLevel() {
+                if(this.level < 10) {
+                    this.level++;
+                    document.getElementById('win-screen').classList.add('hidden');
+                    document.getElementById('game-screen').classList.remove('hidden');
+                    this.startLevel();
+                } else {
+                    this.showHome();
+                }
+            }
+
+            showHome() {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById('start-screen').classList.remove('hidden');
+            }
+        }
+
+        const game = new Game();
+
+        // Prevent Pull-to-refresh on mobile
+        document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    </script>
+</body>
+</html>
