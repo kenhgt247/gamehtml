@@ -1,1 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Bunny English PRO (UK Edition)</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <canvas id="confettiCanvas"></canvas>
+    <div id="app">
+        <header id="mainHeader">
+            <div class="currency-board">
+                <span class="coin-icon">🪙</span> <span id="coinDisplay">0</span>
+                <span class="star-icon">⭐</span> <span id="starDisplay">0</span>
+            </div>
+            <button id="btnHome" onclick="app.navTo('menu')" class="icon-btn">🏠</button>
+        </header>
 
+        <div id="view-menu" class="view active">
+            <h1 class="game-title">ENGLISH BUNNY <br><span style="font-size:1rem; color:#888">(UK Edition 🇬🇧)</span></h1>
+            <div class="bunny-mascot large" id="menuBunny">🐰</div>
+            <div class="menu-grid">
+                <button onclick="app.navTo('map')" class="btn-primary big">▶️ PLAY</button>
+                <button onclick="app.navTo('shop')" class="btn-secondary">🛍️ SHOP</button>
+                <button onclick="app.navTo('album')" class="btn-secondary">📒 ALBUM</button>
+                <button onclick="app.navTo('achievements')" class="btn-secondary">🏆 AWARDS</button>
+            </div>
+            <button id="btnParent" class="btn-tiny">🔒 Parent (Hold 2s)</button>
+        </div>
+
+        <div id="view-map" class="view">
+            <h2>LEVEL MAP (1-100)</h2>
+            <div id="levelGrid" class="level-grid"></div>
+            <button id="btnJumpLast" class="btn-small">⏩ Jump to Current</button>
+        </div>
+
+        <div id="view-game" class="view">
+            <div class="game-hud">
+                <div class="progress-bar"><div id="gameProgress"></div></div>
+                <div id="gameBunny" class="bunny-mascot medium">🐰</div>
+            </div>
+            <div class="game-content">
+                <h3 id="questionText">...</h3>
+                <button id="btnListen" class="btn-sound">🇬🇧 Listen</button>
+                <div id="answerArea" class="answer-grid"></div>
+            </div>
+            <div id="coopOverlay" class="modal hidden">
+                <div class="modal-content">
+                    <h3>👨‍👩‍👧 PARENT CHECK</h3>
+                    <p>Baby chose: <span id="childSelection" style="font-size:1.5rem"></span></p>
+                    <div class="coop-actions">
+                        <button id="coopConfirm" class="btn-success">✅ Correct</button>
+                        <button id="coopReject" class="btn-danger">❌ Wrong</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-shop" class="view"><h2>STICKER SHOP 🏪</h2><div id="shopGrid" class="shop-grid"></div></div>
+        <div id="view-album" class="view"><h2>MY ALBUM 📒</h2><div id="albumGrid" class="album-grid"></div></div>
+        <div id="view-achievements" class="view"><h2>TROPHIES 🏆</h2><div id="achieveGrid" class="achieve-list"></div></div>
+
+        <div id="dailyRewardModal" class="modal hidden">
+            <div class="modal-content bounce">
+                <h2>🎁 DAILY GIFT!</h2>
+                <div class="bunny-mascot">🥳</div>
+                <p>+20 Coins</p>
+                <button onclick="app.closeDailyReward()" class="btn-primary">THANKS!</button>
+            </div>
+        </div>
+
+        <div id="levelCompleteModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>LEVEL COMPLETE!</h2>
+                <div id="levelStars" class="stars-result">⭐⭐⭐</div>
+                <p>+<span id="levelCoins">0</span> Coins</p>
+                <button onclick="game.nextLevel()" class="btn-primary">NEXT ▶️</button>
+                <button onclick="app.navTo('map')" class="btn-secondary">MAP 🗺️</button>
+            </div>
+        </div>
+
+        <div id="parentModal" class="modal hidden">
+            <div class="modal-content parent-panel">
+                <h3>🔒 PARENT SETTINGS</h3>
+                <label>Age: <select id="settingAge"><option value="2-3">2-3 (Easy)</option><option value="4-5">4-5 (Medium)</option><option value="6">6+ (Hard)</option></select></label>
+                <label style="margin-top:10px; display:block"><input type="checkbox" id="settingCoop"> Co-op Mode (2 Players)</label>
+                <hr>
+                <div class="parent-actions">
+                    <button onclick="dataManager.resetProgress()" class="btn-danger">Reset All</button>
+                    <button onclick="dataManager.unlockAll()" class="btn-warning">Unlock 100 Levels</button>
+                    <button onclick="app.exportData()" class="btn-small">Copy Data</button>
+                    <button onclick="app.closeParent()" class="btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
