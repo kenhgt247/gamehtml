@@ -35,6 +35,7 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             background: var(--bg-color); z-index: 10; padding: 20px;
+            transition: opacity 0.3s;
         }
 
         .btn {
@@ -216,16 +217,40 @@
             {id:79, w:"WIND", i:"💨"}, {id:80, w:"UMBRELLA", i:"☂️"}
         ];
 
-        // --- AUDIO ENGINE ---
+        // --- AUDIO ENGINE (Fixed for iPhone British Voice) ---
         const AudioSys = {
             ctx: null,
-            init: function() {
-                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-            },
-            playTone: function(freq, type, duration) {
-                if (!this.ctx) this.init();
-                if(this.ctx.state === 'suspended') this.ctx.resume();
+            synth: window.speechSynthesis,
+            selectedVoice: null,
+
+            init: function() { 
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+                this.loadVoices();
                 
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack for iOS loading delay
+                setInterval(() => {
+                    if(!this.selectedVoice) this.loadVoices();
+                }, 1000);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // Priority: iOS Premium -> Google UK -> Generic GB -> Generic US
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel' || v.name === 'Arthur') || 
+                    voices.find(v => v.name.includes('Google UK English Male')) ||
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-US');
+            },
+
+            playTone: function(freq, type, duration) {
+                if(this.ctx.state === 'suspended') this.ctx.resume();
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = type;
@@ -237,12 +262,40 @@
                 osc.start();
                 osc.stop(this.ctx.currentTime + duration);
             },
+            
             playCorrect: function() {
                 this.playTone(600, 'sine', 0.1);
                 setTimeout(() => this.playTone(800, 'sine', 0.2), 100);
             },
+            
             playWrong: function() {
                 this.playTone(150, 'sawtooth', 0.3);
+            },
+            
+            speak: function(text) {
+                // iOS Audio Context Resume Hack
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                
+                if (this.synth.speaking) this.synth.cancel();
+
+                // Ensure voice is loaded
+                if (!this.selectedVoice) this.loadVoices();
+
+                const u = new SpeechSynthesisUtterance(text);
+                
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; 
+                }
+                
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                
+                // Small delay for iOS to catch up
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
             }
         };
 
@@ -269,6 +322,7 @@
                 document.getElementById('game-screen').classList.remove('hidden');
                 this.score = 0;
                 this.level = 1;
+                // Init audio on user gesture
                 AudioSys.init();
                 this.startLevel();
             }
@@ -391,6 +445,10 @@
                 if (dragId === dropId) {
                     // Correct
                     AudioSys.playCorrect();
+                    
+                    // Speak word
+                    AudioSys.speak(dragEl.innerText);
+
                     dragEl.classList.remove('dragging');
                     dragEl.classList.add('matched');
                     dropEl.classList.add('matched');
@@ -481,6 +539,7 @@
                 document.getElementById('game-screen').classList.add('hidden');
                 document.getElementById('win-screen').classList.remove('hidden');
                 confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                AudioSys.speak("Excellent work!");
             }
 
             nextLevel() {
@@ -501,6 +560,13 @@
         }
 
         const game = new Game();
+
+        // Fix iOS Audio Context on first touch
+        window.addEventListener('touchstart', function() {
+            if (AudioSys.ctx.state === 'suspended') {
+                AudioSys.ctx.resume();
+            }
+        }, {once:true});
 
         // Prevent Pull-to-refresh on mobile
         document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
