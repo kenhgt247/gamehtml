@@ -1,0 +1,32 @@
+{
+  "id": "lesson-01",
+  "title": "Fruits 1",
+  "steps": [
+    {
+      "type": "listen_choose",
+      "prompt": "Find apple",
+      "lang": "en-GB",
+      "speak": "Find apple",
+      "answer": "apple",
+      "choices": [
+        { "id": "apple", "label": "apple", "emoji": "🍎", "audio": "" },
+        { "id": "banana", "label": "banana", "emoji": "🍌", "audio": "" },
+        { "id": "grape", "label": "grape", "emoji": "🍇", "audio": "" },
+        { "id": "orange", "label": "orange", "emoji": "🍊", "audio": "" }
+      ]
+    },
+    {
+      "type": "listen_choose",
+      "prompt": "Find banana",
+      "lang": "en-GB",
+      "speak": "Find banana",
+      "answer": "banana",
+      "choices": [
+        { "id": "banana", "label": "banana", "emoji": "🍌", "audio": "" },
+        { "id": "apple", "label": "apple", "emoji": "🍎", "audio": "" },
+        { "id": "grape", "label": "grape", "emoji": "🍇", "audio": "" },
+        { "id": "orange", "label": "orange", "emoji": "🍊", "audio": "" }
+      ]
+    }
+  ]
+}
