@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "units": [
+    {
+      "id": "unit-01",
+      "title": "Unit 1 • First Words",
+      "lessons": [
+        { "id": "lesson-01", "title": "Fruits 1", "pack": "/content/unit-01/lesson-01.json" },
+        { "id": "lesson-02", "title": "Animals 1", "pack": "/content/unit-01/lesson-02.json" }
+      ]
+    }
+  ]
+}
