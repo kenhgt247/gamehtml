@@ -287,11 +287,37 @@
             { word: "FIRE", emoji: "🔥", cat: "nature" }
         ];
 
-        // --- AUDIO CONTROLLER ---
+        // --- AUDIO CONTROLLER (FIXED FOR IPHONE) ---
         class AudioController {
             constructor() {
                 this.ctx = new (window.AudioContext || window.webkitAudioContext)();
                 this.synth = window.speechSynthesis;
+                this.selectedVoice = null;
+                
+                // Pre-load voices logic
+                this.loadVoices();
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack: Check repeatedly for voices on iOS
+                let checkInterval = setInterval(() => {
+                    if (this.selectedVoice) clearInterval(checkInterval);
+                    this.loadVoices();
+                }, 1000);
+            }
+
+            loadVoices() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // Priority for British English
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel') || 
+                    voices.find(v => v.name === 'Arthur') || 
+                    voices.find(v => v.name.includes('Google UK English Male')) || 
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-US'); // Fallback
             }
 
             playTone(freq, type, duration) {
@@ -318,12 +344,26 @@
             }
 
             speak(text) {
+                // iOS requires audio context to be running
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                
                 if (this.synth.speaking) this.synth.cancel();
+                if (!this.selectedVoice) this.loadVoices();
+
                 const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US';
+                
+                if (this.selectedVoice) {
+                    utterance.voice = this.selectedVoice;
+                } else {
+                    utterance.lang = 'en-GB';
+                }
+                
                 utterance.rate = 0.9;
-                utterance.pitch = 1.1; // Slightly higher pitch for kids
-                this.synth.speak(utterance);
+                utterance.pitch = 1.1; 
+                
+                setTimeout(() => {
+                    this.synth.speak(utterance);
+                }, 10);
             }
         }
 
@@ -424,7 +464,10 @@
             start() {
                 document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
                 document.getElementById('ui-layer').classList.remove('hidden');
-                this.audio.ctx.resume(); // Ensure audio context is ready
+                
+                // Unlock audio context on user gesture
+                if(this.audio.ctx.state === 'suspended') this.audio.ctx.resume();
+                
                 this.startLevel(1);
             }
 
@@ -586,6 +629,7 @@
 
                 document.getElementById('level-complete-screen').classList.remove('hidden');
                 this.audio.playCorrect();
+                this.audio.speak("Level complete! " + praise);
                 confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
             }
 
@@ -605,6 +649,7 @@
                 this.stopEngine();
                 document.getElementById('final-score').innerText = "Score: " + this.score;
                 document.getElementById('game-over-screen').classList.remove('hidden');
+                this.audio.speak("Game Over. Try again!");
             }
 
             restartLevel() {
@@ -646,6 +691,13 @@
 
         // Init Game
         const game = new Game();
+
+        // Fix iOS Audio Context on first touch
+        window.addEventListener('touchstart', function() {
+            if (game.audio.ctx.state === 'suspended') {
+                game.audio.ctx.resume();
+            }
+        }, {once:true});
 
         // Prevent zoom on double tap
         document.addEventListener('dblclick', function(event) {
