@@ -485,7 +485,7 @@
                 this.playing = false;
                 document.querySelectorAll('.screen').forEach(s => {
                     s.classList.remove('active');
-                    s.classList.add('hidden');
+                    if(s.id !== 'start-screen') s.classList.add('hidden');
                 });
                 document.getElementById('hud').classList.add('hidden');
                 document.getElementById('task-bar').classList.add('hidden');
