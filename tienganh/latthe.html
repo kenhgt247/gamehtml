@@ -139,10 +139,9 @@
         /* Dynamic columns handled in JS for best fit, fallback css */
         .grid-3 { grid-template-columns: repeat(3, 1fr); }
         .grid-4 { grid-template-columns: repeat(4, 1fr); }
-        .grid-5 { grid-template-columns: repeat(5, 1fr); } /* Desktop large levels */
-        .grid-6 { grid-template-columns: repeat(6, 1fr); } /* Desktop large levels */
+        .grid-5 { grid-template-columns: repeat(5, 1fr); } 
+        .grid-6 { grid-template-columns: repeat(6, 1fr); } 
 
-        /* Accessibility: Reduced Motion */
         @media (prefers-reduced-motion: reduce) {
             .card-inner { transition: transform 0s; }
             .modal-content, .card.matched .card-inner { animation: none; }
@@ -268,42 +267,84 @@
             settings: { sound: true }
         };
 
-        // --- 1. UTILITIES & AUDIO ---
-        const playSound = (type) => {
-            if (!gameState.settings.sound) return;
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
+        // --- AUDIO ENGINE (FIXED FOR IPHONE) ---
+        const AudioSys = {
+            ctx: null,
+            synth: window.speechSynthesis,
+            selectedVoice: null,
 
-            const now = ctx.currentTime;
-            if (type === 'flip') {
-                osc.type = 'sine'; osc.frequency.setValueAtTime(400, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                osc.start(now); osc.stop(now + 0.1);
-            } else if (type === 'match') {
-                osc.type = 'triangle'; 
-                osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                osc.start(now); osc.stop(now + 0.3);
-            } else if (type === 'wrong') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(200, now);
-                osc.frequency.linearRampToValueAtTime(100, now + 0.2);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                osc.start(now); osc.stop(now + 0.3);
+            init: function() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Pre-load voices
+                this.loadVoices();
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack for iOS loading delay
+                let attempts = 0;
+                let interval = setInterval(() => {
+                    if (this.selectedVoice || attempts > 10) clearInterval(interval);
+                    this.loadVoices();
+                    attempts++;
+                }, 500);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // Priority: iOS Premium -> Google UK -> Generic GB -> Generic US
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel' || v.name === 'Arthur') || 
+                    voices.find(v => v.name.includes('Google UK English Male')) ||
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-US');
+            },
+
+            playTone: function(freq, type, duration) {
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            
+            ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1200, 'sine', 0.2), 100); },
+            oops: function() { this.playTone(200, 'sawtooth', 0.3); },
+            
+            speak: function(text) {
+                // iOS Audio Context Resume Hack
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                
+                if (this.synth.speaking) this.synth.cancel();
+
+                // Ensure voice is loaded
+                if (!this.selectedVoice) this.loadVoices();
+
+                const u = new SpeechSynthesisUtterance(text);
+                
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; // Fallback
+                }
+                
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                
+                // Small delay for iOS to catch up
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
             }
-        };
-
-        const speakWord = (word) => {
-            if (!gameState.settings.sound) return;
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(word);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
         };
 
         // --- 2. STORAGE MANAGEMENT ---
@@ -317,7 +358,6 @@
             if (level >= progress.unlocked && level < 10) {
                 progress.unlocked = level + 1;
             }
-            // Keep highest stars
             const currentStars = progress.stars[level] || 0;
             if (stars > currentStars) {
                 progress.stars[level] = stars;
@@ -374,6 +414,10 @@
             buildLevelMap();
             document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
             document.getElementById('level-map').classList.remove('hidden');
+            
+            // Activate Audio on map show (user gesture)
+            if(AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+            AudioSys.init();
         };
 
         // --- 4. GAME LOGIC ---
@@ -390,7 +434,6 @@
             
             // Build Deck
             let pairs = [...levelData.pairs];
-            // Difficulty adjustments could go here (e.g. limit pairs for Easy)
             let deck = [];
             pairs.forEach(p => {
                 deck.push({ ...p, id: Math.random() }); // Card A
@@ -416,12 +459,12 @@
             
             // Auto Grid sizing
             const cardCount = deck.length;
-            board.className = ''; // Reset class
+            board.className = ''; 
             if (cardCount <= 6) board.style.gridTemplateColumns = "repeat(3, 1fr)";
             else if (cardCount <= 12) board.style.gridTemplateColumns = "repeat(3, 1fr)"; 
             else if (cardCount <= 16) board.style.gridTemplateColumns = "repeat(4, 1fr)";
             else if (window.innerWidth > 600) board.style.gridTemplateColumns = "repeat(6, 1fr)";
-            else board.style.gridTemplateColumns = "repeat(4, 1fr)"; // Fallback mobile
+            else board.style.gridTemplateColumns = "repeat(4, 1fr)";
 
             deck.forEach((card, index) => {
                 const el = document.createElement('div');
@@ -460,7 +503,7 @@
             if (gameState.isLocked) return;
             if (gameState.flipped.includes(index) || gameState.matched.includes(index)) return;
 
-            playSound('flip');
+            AudioSys.ding(); // Flip sound
             const cardEl = document.querySelectorAll('.card')[index];
             cardEl.classList.add('flipped');
             gameState.flipped.push(index);
@@ -481,8 +524,8 @@
 
             if (card1.word === card2.word) {
                 // Match
-                playSound('match');
-                speakWord(card1.word);
+                AudioSys.ding();
+                AudioSys.speak(card1.word);
                 els[idx1].classList.add('matched');
                 els[idx2].classList.add('matched');
                 gameState.matched.push(idx1, idx2);
@@ -494,7 +537,7 @@
                 }
             } else {
                 // No Match
-                playSound('wrong');
+                AudioSys.oops();
                 setTimeout(() => {
                     els[idx1].classList.remove('flipped');
                     els[idx2].classList.remove('flipped');
@@ -511,7 +554,6 @@
             updateHintButton();
             gameState.isLocked = true;
 
-            // Find an unmatched pair
             let availableIndices = gameState.cards
                 .map((_, i) => i)
                 .filter(i => !gameState.matched.includes(i));
@@ -520,13 +562,11 @@
 
             const firstIdx = availableIndices[0];
             const firstCard = gameState.cards[firstIdx];
-            // Find its pair
             const secondIdx = availableIndices.find(i => i !== firstIdx && gameState.cards[i].word === firstCard.word);
 
             const els = document.querySelectorAll('.card');
             
-            // Peek
-            playSound('flip');
+            AudioSys.ding();
             els[firstIdx].classList.add('flipped');
             els[secondIdx].classList.add('flipped');
 
@@ -543,25 +583,24 @@
             if (gameState.hints === 0) btn.style.opacity = 0.5;
         };
 
+        const speakWord = (word) => {
+            AudioSys.speak(word);
+        };
+
         const endLevel = () => {
             clearInterval(gameState.timerInterval);
             
-            // Calculate Stars
             const totalPairs = gameState.cards.length / 2;
             const perfectMoves = totalPairs;
-            // Criteria: 3 stars = perfect + 2 buffer, 2 stars = perfect + 5 buffer
             let stars = 1;
             if (gameState.moves <= perfectMoves + 2) stars = 3;
             else if (gameState.moves <= perfectMoves + 6) stars = 2;
             
-            // Time penalty for Hard mode
             const duration = (Date.now() - gameState.startTime) / 1000;
             if (gameState.difficulty === 'hard' && duration > totalPairs * 4) stars = Math.max(1, stars - 1);
 
-            // Save
             saveProgress(gameState.level, stars);
 
-            // Show Result
             document.getElementById('res-title').innerText = "Level Complete!";
             document.getElementById('res-stars').innerText = "⭐".repeat(stars);
             document.getElementById('res-time').innerText = document.getElementById('hud-time').innerText;
@@ -570,10 +609,8 @@
             const praises = ["Awesome!", "Well Done!", "Excellent!", "Super!", "Amazing!"];
             document.getElementById('res-msg').innerText = praises[Math.floor(Math.random() * praises.length)];
 
-            // Confetti
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
 
-            // Button Logic
             const nextBtn = document.getElementById('btn-next');
             if (gameState.level >= 10) nextBtn.style.display = 'none';
             else nextBtn.style.display = 'inline-block';
@@ -581,7 +618,6 @@
             showModal('result');
         };
 
-        // --- 5. NAVIGATION HELPER ---
         const restartLevel = () => {
             hideModal('result');
             startLevel(gameState.level);
@@ -599,7 +635,6 @@
             }
         };
 
-        // --- 6. MODAL SYSTEM ---
         const showModal = (name) => {
             document.getElementById(`modal-${name}`).classList.remove('hidden');
         };
@@ -608,20 +643,22 @@
             document.getElementById(`modal-${name}`).classList.add('hidden');
         };
 
-        // --- 7. INIT ---
         window.onload = () => {
-            // Check Embed Mode
             const urlParams = new URLSearchParams(window.location.search);
             const isEmbed = urlParams.get('embed') === '1';
 
+            // Fix iOS Audio Context on first touch
+            window.addEventListener('touchstart', function() {
+                if (AudioSys.ctx.state === 'suspended') {
+                    AudioSys.ctx.resume();
+                }
+            }, {once:true});
+
             if (isEmbed) {
-                // Skip start screen, go to latest unlocked level
                 const progress = loadProgress();
                 let target = progress.unlocked;
-                // If all done, go to random or 1
                 if (target > 10) target = 1;
                 startLevel(target);
-                // Hide home button in header for embed simplicity
                 document.querySelector('#game-header .btn-secondary').style.display = 'none';
             }
         };
