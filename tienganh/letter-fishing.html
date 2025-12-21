@@ -161,31 +161,116 @@
         <button class="btn btn-home" onclick="game.goHome()">Home</button>
     </div>
 
-    <script>
-        // --- AUDIO ENGINE ---
-        const AudioSys = {
-            ctx: null,
-            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
-            playTone: function(freq, type, duration) {
-                if (!this.ctx) this.init();
-                if(this.ctx.state === 'suspended') this.ctx.resume();
-                const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
-                o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
-                g.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-                o.connect(g); g.connect(this.ctx.destination);
-                o.start(); o.stop(this.ctx.currentTime + duration);
-            },
-            ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.2), 100); },
-            oops: function() { this.playTone(150, 'sawtooth', 0.4); },
-            splash: function() { this.playTone(300, 'triangle', 0.1); },
-            speak: function(text) {
-                window.speechSynthesis.cancel();
-                const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'en-US'; u.rate = 0.9;
-                window.speechSynthesis.speak(u);
-            }
-        };
+   <script>
+const AudioSys = {
+  ctx: null,
+  voices: [],
+  voicesReady: false,
+
+  init: function() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.loadVoices();
+  },
+
+  unlock: async function() {
+    this.init();
+    try {
+      if (this.ctx.state === 'suspended') await this.ctx.resume();
+      // ping im lặng để iOS mở audio ổn định
+      const b = this.ctx.createBuffer(1, 1, 22050);
+      const s = this.ctx.createBufferSource();
+      s.buffer = b;
+      s.connect(this.ctx.destination);
+      s.start(0);
+    } catch {}
+  },
+
+  loadVoices: function() {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
+    const pull = () => {
+      const v = synth.getVoices() || [];
+      if (v.length) {
+        this.voices = v;
+        this.voicesReady = true;
+      }
+    };
+
+    pull();
+    synth.onvoiceschanged = () => pull();
+
+    // fallback retry
+    let tries = 0;
+    const t = setInterval(() => {
+      pull();
+      tries++;
+      if (this.voicesReady || tries >= 25) clearInterval(t);
+    }, 100);
+  },
+
+  pickVoice: function(lang) {
+    const v = this.voices || [];
+    const L = (lang || "").toLowerCase();
+
+    // ưu tiên en-GB trước
+    let best =
+      v.find(x => (x.lang || "").toLowerCase() === L && x.localService) ||
+      v.find(x => (x.lang || "").toLowerCase() === L) ||
+      null;
+
+    // fallback cho tiếng Anh: bất kỳ en-* nếu không có en-GB
+    if (!best && L.startsWith("en-")) {
+      best =
+        v.find(x => (x.lang || "").toLowerCase().startsWith("en-") && x.localService) ||
+        v.find(x => (x.lang || "").toLowerCase().startsWith("en-")) ||
+        null;
+    }
+    return best;
+  },
+
+  playTone: function(freq, type, duration) {
+    if (!this.ctx) this.init();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(); o.stop(this.ctx.currentTime + duration);
+  },
+
+  ding: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.2), 100); },
+  oops: function() { this.playTone(150, 'sawtooth', 0.4); },
+  splash: function() { this.playTone(300, 'triangle', 0.1); },
+
+  // ✅ Web Speech - ưu tiên Anh-Anh
+  speak: function(text, lang = "en-GB") {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
+    if (!this.voicesReady) this.loadVoices();
+
+    try { synth.cancel(); } catch {}
+
+    // iOS: delay nhẹ để tránh "nuốt" sau cancel
+    setTimeout(() => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;      // ✅ en-GB
+      u.rate = 0.92;
+
+      const voice = this.pickVoice(lang);
+      if (voice) u.voice = voice;
+
+      try { synth.speak(u); } catch {}
+    }, 60);
+  }
+};
+</script>
+
 
         // --- GAME LOGIC ---
         class Fish {
