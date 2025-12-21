@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Little Doctor - Kids Game</title>
+<style>
+    :root {
+        --bg-color: #E0F7FA;
+        --ui-bg: rgba(255, 255, 255, 0.95);
+        --accent: #00BCD4;
+        --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: var(--bg-color);
+        overflow: hidden;
+        font-family: var(--font-main);
+    }
+
+    #game-container {
+        position: relative; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+
+    canvas {
+        display: block; width: 100%; height: 100%;
+        background: radial-gradient(circle, #ffffff 0%, #E0F7FA 100%);
+    }
+
+    /* UI LAYERS */
+    .ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 10; pointer-events: none;
+    }
+    
+    .ui-content {
+        pointer-events: auto;
+        background: var(--ui-bg);
+        padding: 30px; border-radius: 25px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        max-width: 90%; width: 340px;
+        animation: popIn 0.3s ease-out;
+    }
+
+    h1 { margin: 0 0 10px; color: var(--accent); font-size: 2rem; }
+    p { font-size: 1.2rem; color: #555; margin-bottom: 25px; }
+    
+    .btn {
+        background: linear-gradient(to bottom, #26C6DA, #0097A7);
+        color: white; border: none; padding: 15px 40px;
+        font-size: 1.4rem; border-radius: 50px;
+        cursor: pointer; font-weight: bold;
+        box-shadow: 0 5px 0 #006064;
+        transition: transform 0.1s;
+        min-width: 180px;
+    }
+    .btn:active { transform: translateY(5px); box-shadow: none; }
+    
+    /* HUD & BUTTONS */
+    .hud-btn {
+        position: absolute; top: max(15px, env(safe-area-inset-top)); 
+        width: 45px; height: 45px; border-radius: 50%;
+        background: white; border: none; font-size: 1.4rem;
+        box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+        cursor: pointer; z-index: 20; display: flex; justify-content: center; align-items: center;
+    }
+    #btnPause { left: 15px; }
+    #btnMute { left: 70px; }
+    
+    .hud-info {
+        position: absolute; top: max(15px, env(safe-area-inset-top)); right: 15px;
+        display: flex; gap: 10px; z-index: 20;
+    }
+    .tag { background: white; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+    #bottom-bar {
+        position: absolute; bottom: 20px; width: 100%;
+        display: flex; justify-content: center; gap: 20px; pointer-events: none;
+    }
+    #bottom-bar .btn-round {
+        pointer-events: auto; width: 60px; height: 60px; border-radius: 50%;
+        border: none; font-size: 1.8rem; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        cursor: pointer; display: flex; justify-content: center; align-items: center;
+    }
+
+    .hidden { display: none !important; }
+    .shake { animation: shake 0.5s; }
+    @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <button id="btnPause" class="hud-btn hidden">⏸</button>
+    <button id="btnMute" class="hud-btn hidden">🔊</button>
+    <div id="hudInfo" class="hud-info hidden">
+        <div class="tag">Level <span id="lblLevel">1</span></div>
+        <div class="tag" style="color:#e91e63">❤ <span id="lblHearts">3</span></div>
+    </div>
+
+    <div id="bottom-bar" class="hidden">
+        <button id="btnHint" class="btn-round" style="background:#FFF176;">💡</button>
+        <button id="btnReplayTTS" class="btn-round" style="background:#81D4FA;">🗣</button>
+    </div>
+
+    <div id="screen-start" class="ui-layer">
+        <div class="ui-content">
+            <h1>Little Doctor 🩺</h1>
+            <p>The patient is sick!<br>Drag the right tool to help.</p>
+            <button id="btnStart" class="btn">PLAY</button>
+        </div>
+    </div>
+
+    <div id="screen-pause" class="ui-layer hidden">
+        <div class="ui-content">
+            <h1>PAUSED</h1>
+            <button id="btnResume" class="btn">RESUME</button>
+            <br><br>
+            <button id="btnQuit" class="btn" style="background:#999; font-size:1rem; padding:10px 20px;">EXIT</button>
+        </div>
+    </div>
+
+    <div id="screen-gameover" class="ui-layer hidden">
+        <div class="ui-content">
+            <h1 id="msgGameOver">Game Over</h1>
+            <p id="subMsgGameOver">Good try!</p>
+            <button id="btnRestart" class="btn">REPLAY</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * GAME 2: LITTLE DOCTOR
+ * Mechanics: Drag & Drop
+ * Optimized for iOS Safari
+ */
+
+// ==============================
+// 1. DATA & CONFIG
+// ==============================
+const TOOLS = {
+    BANDAGE: { id: 'bandage', name: 'Bandage', color: '#FFE0B2', type: 'rect' },
+    THERMOMETER: { id: 'thermometer', name: 'Thermometer', color: '#FFFFFF', type: 'stick' },
+    SYRUP: { id: 'syrup', name: 'Syrup', color: '#AB47BC', type: 'bottle' },
+    ICEPACK: { id: 'icepack', name: 'Ice Pack', color: '#29B6F6', type: 'bag' },
+    STETHOSCOPE: { id: 'stethoscope', name: 'Stethoscope', color: '#546E7A', type: 'u-shape' },
+    CREAM: { id: 'cream', name: 'Cream', color: '#FFF59D', type: 'tube' }
+};
+
+const AILMENTS = [
+    { id: 'cut', text: 'a cut', tool: 'bandage', hint: 'Cover the red cut!' },
+    { id: 'fever', text: 'a fever', tool: 'thermometer', hint: 'Check the temperature!' },
+    { id: 'cough', text: 'a cough', tool: 'syrup', hint: 'Drink some medicine!' },
+    { id: 'bump', text: 'a bump', tool: 'icepack', hint: 'Cool it down!' },
+    { id: 'heartbeat', text: 'checkup', tool: 'stethoscope', hint: 'Listen to the heart!' },
+    { id: 'rash', text: 'a rash', tool: 'cream', hint: 'Apply the cream!' }
+];
+
+const CFG = {
+    totalLevels: 30,
+    hearts: 3,
+    hintDuration: 2000
+};
+
+// ==============================
+// 2. AUDIO SYSTEM (iOS Safe)
+// ==============================
+class AudioSys {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.voice = null;
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => this.loadVoice();
+            this.loadVoice();
+        }
+    }
+    loadVoice() {
+        const v = window.speechSynthesis.getVoices();
+        this.voice = v.find(x => x.lang === 'en-GB') || v.find(x => x.lang.startsWith('en'));
+    }
+    init() {
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+                this.ctx = new AC();
+                this.ctx.resume();
+            }
+        } catch(e){}
+    }
+    toggleMute() { this.muted = !this.muted; return this.muted; }
+    
+    beep(type) {
+        if (this.muted || !this.ctx) return;
+        try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            const now = this.ctx.currentTime;
+            
+            if(type === 'win') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now+0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now+0.4);
+                osc.start(now); osc.stop(now+0.4);
+            } else if(type === 'lose') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(100, now+0.3);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.linearRampToValueAtTime(0, now+0.3);
+                osc.start(now); osc.stop(now+0.3);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now+0.1);
+                osc.start(now); osc.stop(now+0.1);
+            }
+        } catch(e){}
+    }
+
+    speak(text) {
+        if (this.muted || !window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        setTimeout(() => {
+            const u = new SpeechSynthesisUtterance(text);
+            if(this.voice) u.voice = this.voice;
+            u.lang = 'en-GB'; u.rate = 0.9;
+            window.speechSynthesis.speak(u);
+        }, 50);
+    }
+}
+
+// ==============================
+// 3. GRAPHICS HELPER (Canvas Drawing)
+// ==============================
+const Draw = {
+    roundRect(ctx, x, y, w, h, r, color) {
+        ctx.beginPath();
+        ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+        ctx.quadraticCurveTo(x+w, y, x+w, y+r); ctx.lineTo(x+w, y+h-r);
+        ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h); ctx.lineTo(x+r, y+h);
+        ctx.quadraticCurveTo(x, y+h, x, y+h-r); ctx.lineTo(x, y+r);
+        ctx.quadraticCurveTo(x, y, x+r, y);
+        ctx.fillStyle = color; ctx.fill();
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+    },
+    
+    icon(ctx, type, x, y, size) {
+        ctx.save();
+        ctx.translate(x, y);
+        const s = size/2;
+        
+        if (type === 'rect') { // Bandage
+            this.roundRect(ctx, -s, -s*0.6, size, size*0.6, 5, '#FFE0B2');
+            ctx.fillStyle = 'white'; ctx.beginPath();
+            ctx.arc(0, 0, s*0.4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#E57373'; 
+            ctx.fillRect(-3, -8, 6, 16); ctx.fillRect(-8, -3, 16, 6); // Cross
+        } 
+        else if (type === 'stick') { // Thermometer
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath(); ctx.roundRect(-5, -s, 10, size, 5); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = 'red';
+            ctx.beginPath(); ctx.arc(0, s-5, 8, 0, Math.PI*2); ctx.fill(); // bulb
+            ctx.fillRect(-2, -s+10, 4, s*1.5);
+        }
+        else if (type === 'bottle') { // Syrup
+            ctx.fillStyle = '#AB47BC';
+            ctx.beginPath(); ctx.moveTo(-s*0.5, -s*0.6); ctx.lineTo(s*0.5, -s*0.6);
+            ctx.lineTo(s*0.8, s); ctx.lineTo(-s*0.8, s); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = 'white'; ctx.fillRect(-s*0.4, -s*0.2, s*0.8, s*0.6); // label
+            ctx.fillStyle = '#333'; ctx.fillRect(-s*0.3, -s, s*0.6, s*0.4); // cap
+        }
+        else if (type === 'bag') { // Icepack
+            this.roundRect(ctx, -s*0.8, -s*0.8, size*0.8, size*0.8, 5, '#29B6F6');
+            ctx.font = '20px Arial'; ctx.fillStyle='white'; ctx.textAlign='center';
+            ctx.fillText('❄', 0, 8);
+        }
+        else if (type === 'u-shape') { // Stethoscope
+            ctx.strokeStyle = '#546E7A'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(0, -10, s*0.8, Math.PI, 0); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -10 + s*0.8); ctx.lineTo(0, s); ctx.stroke();
+            ctx.fillStyle = '#CFD8DC'; ctx.beginPath(); ctx.arc(0, s, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        }
+        else if (type === 'tube') { // Cream
+            ctx.fillStyle = '#FFF59D';
+            ctx.beginPath(); ctx.moveTo(-s*0.5, s); ctx.lineTo(s*0.5, s); 
+            ctx.lineTo(s*0.5, -s*0.5); ctx.lineTo(0, -s); ctx.lineTo(-s*0.5, -s*0.5);
+            ctx.fill(); ctx.stroke();
+        }
+        
+        ctx.restore();
+    },
+
+    patient(ctx, x, y, size, ailmentId, state) {
+        ctx.save();
+        ctx.translate(x, y);
+        
+        // Head
+        ctx.fillStyle = '#FFCC80';
+        ctx.beginPath(); ctx.arc(0, 0, size, 0, Math.PI*2); ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#E65100'; ctx.stroke();
+        
+        // Eyes
+        ctx.fillStyle = '#333';
+        if (state === 'WIN') { // Happy eyes
+            ctx.beginPath(); ctx.arc(-20, -15, 5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(20, -15, 5, 0, Math.PI*2); ctx.fill();
+        } else { // Sick eyes
+             ctx.fillText('x', -25, -10); ctx.fillText('x', 15, -10);
+        }
+
+        // Mouth
+        ctx.lineWidth = 3; ctx.strokeStyle = '#D84315'; ctx.beginPath();
+        if (state === 'WIN') {
+            ctx.arc(0, 10, 20, 0, Math.PI, false); // Smile
+        } else {
+             ctx.arc(0, 35, 15, 0, Math.PI, true); // Frown
+        }
+        ctx.stroke();
+
+        // Ailment Graphics
+        if (state !== 'WIN') {
+            if(ailmentId === 'cut') {
+                ctx.strokeStyle = 'red'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(-30, 0); ctx.lineTo(-10, 20); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-30, 20); ctx.stroke();
+            }
+            if(ailmentId === 'fever') {
+                ctx.fillStyle = 'rgba(255,0,0,0.3)';
+                ctx.beginPath(); ctx.arc(0, -25, 30, 0, Math.PI*2); ctx.fill();
+            }
+            if(ailmentId === 'bump') {
+                ctx.fillStyle = 'rgba(100,0,255,0.2)';
+                ctx.beginPath(); ctx.arc(25, -20, 20, 0, Math.PI*2); ctx.fill();
+            }
+            if(ailmentId === 'rash') {
+                ctx.fillStyle = 'red';
+                ctx.beginPath(); ctx.arc(-20, 30, 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(20, 25, 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(0, 40, 3, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+};
+
+// ==============================
+// 4. GAME ENGINE
+// ==============================
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.audio = new AudioSys();
+        
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        
+        this.level = 1;
+        this.hearts = 3;
+        this.state = 'MENU'; // MENU, PLAY, WIN, OVER
+        
+        this.currentAilment = null;
+        this.tableItems = [];
+        this.particles = [];
+        
+        this.dragItem = null;
+        this.dragOffset = {x:0, y:0};
+        
+        this.hintTime = 0;
+        this.hintsLeft = 3;
+        
+        this.setupEvents();
+        this.resize();
+        
+        // Loop
+        const loop = () => {
+            this.update();
+            this.draw();
+            requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+    }
+
+    setupEvents() {
+        window.addEventListener('resize', () => this.resize());
+        
+        const get = id => document.getElementById(id);
+        const hide = id => get(id).classList.add('hidden');
+        const show = id => get(id).classList.remove('hidden');
+
+        get('btnStart').onclick = () => {
+            this.audio.init();
+            hide('screen-start');
+            show('btnPause'); show('btnMute'); show('hudInfo'); show('bottom-bar');
+            this.startLevel(1);
+        };
+
+        get('btnPause').onclick = () => {
+            this.state = 'PAUSED';
+            show('screen-pause');
+        };
+        get('btnResume').onclick = () => {
+            hide('screen-pause');
+            this.state = 'PLAY';
+        };
+        get('btnQuit').onclick = () => location.reload();
+        
+        get('btnRestart').onclick = () => {
+            hide('screen-gameover');
+            this.startLevel(1);
+        };
+
+        get('btnMute').onclick = () => {
+            const m = this.audio.toggleMute();
+            get('btnMute').textContent = m ? '🔇' : '🔊';
+            get('btnMute').style.opacity = m ? '0.5' : '1';
+        };
+
+        get('btnHint').onclick = () => {
+            if (this.hintsLeft > 0 && this.state === 'PLAY') {
+                this.hintsLeft--;
+                this.hintTime = Date.now() + CFG.hintDuration;
+                this.audio.beep('ui');
+                if(this.hintsLeft === 0) get('btnHint').style.opacity = 0.5;
+            }
+        };
+
+        get('btnReplayTTS').onclick = () => {
+            if(this.currentAilment) this.audio.speak("Help with " + this.currentAilment.text);
+        };
+
+        // Touch/Mouse Events
+        const startDrag = (x, y) => {
+            if (this.state !== 'PLAY') return;
+            for(let item of this.tableItems) {
+                const dist = Math.hypot(x - item.x, y - item.y);
+                if(dist < 50) {
+                    this.dragItem = item;
+                    this.dragOffset.x = item.x - x;
+                    this.dragOffset.y = item.y - y;
+                    // Lift up visual
+                    item.scale = 1.2;
+                    break;
+                }
+            }
+        };
+
+        const moveDrag = (x, y) => {
+            if (this.dragItem) {
+                this.dragItem.x = x + this.dragOffset.x;
+                this.dragItem.y = y + this.dragOffset.y;
+            }
+        };
+
+        const endDrag = () => {
+            if (this.dragItem) {
+                this.checkDrop(this.dragItem);
+                this.dragItem.scale = 1.0;
+                this.dragItem = null;
+            }
+        };
+
+        this.canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+        
+        this.canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+        
+        this.canvas.addEventListener('touchend', e => endDrag());
+
+        // Mouse for PC testing
+        this.canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+        window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+        window.addEventListener('mouseup', e => endDrag());
+    }
+
+    resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        // Reshuffle items if screen changes
+        if(this.state === 'PLAY') this.arrangeTable();
+    }
+
+    startLevel(lvl) {
+        this.level = lvl;
+        this.state = 'PLAY';
+        if(lvl === 1) this.hearts = 3;
+        this.hintsLeft = 3;
+        
+        document.getElementById('lblLevel').textContent = this.level;
+        document.getElementById('lblHearts').textContent = this.hearts;
+        document.getElementById('btnHint').style.opacity = 1;
+
+        // 1. Pick Ailment
+        this.currentAilment = AILMENTS[Math.floor(Math.random() * AILMENTS.length)];
+        
+        // 2. Setup Tools on Table
+        // Always include Correct Tool + Random Distractors
+        const correctToolId = this.currentAilment.tool;
+        let pool = Object.values(TOOLS).filter(t => t.id !== correctToolId);
+        // Shuffle pool
+        pool.sort(() => Math.random() - 0.5);
+        
+        // Count: Level 1-5 (3 items), 6-15 (4 items), 15+ (5 items)
+        const count = Math.min(3 + Math.floor(this.level / 5), 5);
+        const selectedTools = [TOOLS[correctToolId.toUpperCase()]]; // Correct one
+        for(let i=0; i<count-1; i++) selectedTools.push(pool[i]);
+        
+        // Shuffle display order
+        selectedTools.sort(() => Math.random() - 0.5);
+        
+        this.tableItems = selectedTools.map(t => ({
+            ...t,
+            x: 0, y: 0,
+            origX: 0, origY: 0,
+            scale: 1.0
+        }));
+
+        this.arrangeTable();
+        this.particles = [];
+
+        // TTS
+        setTimeout(() => {
+            this.audio.speak("Help! I have " + this.currentAilment.text);
+        }, 500);
+    }
+
+    arrangeTable() {
+        const count = this.tableItems.length;
+        const spacing = this.width / (count + 1);
+        const yPos = this.height - 150;
+        
+        this.tableItems.forEach((item, i) => {
+            item.x = spacing * (i + 1);
+            item.y = yPos;
+            item.origX = item.x;
+            item.origY = item.y;
+        });
+    }
+
+    checkDrop(item) {
+        // Patient Center
+        const px = this.width / 2;
+        const py = this.height / 2 - 50;
+        const dist = Math.hypot(item.x - px, item.y - py);
+        
+        if (dist < 100) { // Dropped on patient
+            if (item.id === this.currentAilment.tool) {
+                this.doWin();
+            } else {
+                this.doFail(item);
+            }
+        } else {
+            // Snap back
+            this.returnItem(item);
+        }
+    }
+
+    returnItem(item) {
+        // Simple lerp animation could go here, for now instant snap with small elasticity
+        item.x = item.origX;
+        item.y = item.origY;
+    }
+
+    doWin() {
+        this.state = 'WIN';
+        this.audio.beep('win');
+        this.audio.speak("Thank you doctor!");
+        
+        // Confetti
+        for(let i=0; i<30; i++) {
+            this.particles.push({
+                x: this.width/2, y: this.height/2,
+                vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                color: `hsl(${Math.random()*360}, 100%, 50%)`,
+                life: 1.0
+            });
+        }
+
+        setTimeout(() => {
+            if (this.level >= CFG.totalLevels) {
+                this.gameOver(true);
+            } else {
+                this.startLevel(this.level + 1);
+            }
+        }, 2000);
+    }
+
+    doFail(item) {
+        this.hearts--;
+        document.getElementById('lblHearts').textContent = this.hearts;
+        this.audio.beep('lose');
+        this.returnItem(item);
+        
+        // Shake Screen
+        document.body.classList.add('shake');
+        setTimeout(()=>document.body.classList.remove('shake'), 500);
+
+        if (this.hearts <= 0) {
+            this.gameOver(false);
+        } else {
+            this.audio.speak("Try again");
+        }
+    }
+
+    gameOver(win) {
+        this.state = 'OVER';
+        document.getElementById('screen-gameover').classList.remove('hidden');
+        const h1 = document.getElementById('msgGameOver');
+        if (win) {
+            h1.textContent = "Great Doctor!";
+            this.audio.speak("You are a great doctor!");
+        } else {
+            h1.textContent = "Game Over";
+            this.audio.speak("Game Over");
+        }
+    }
+
+    update() {
+        // Particles
+        this.particles.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            p.life -= 0.02;
+        });
+        this.particles = this.particles.filter(p => p.life > 0);
+    }
+
+    draw() {
+        // BG
+        this.ctx.clearRect(0,0,this.width, this.height);
+        
+        // Bed / Table Area
+        this.ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        this.ctx.fillRect(0, this.height - 220, this.width, 220); // Table
+        this.ctx.beginPath(); this.ctx.moveTo(0, this.height-220); this.ctx.lineTo(this.width, this.height-220);
+        this.ctx.strokeStyle = '#B0BEC5'; this.ctx.lineWidth = 2; this.ctx.stroke();
+
+        // Patient
+        if (this.currentAilment) {
+            this.ctx.save();
+            // Bed Pillow
+            this.ctx.fillStyle = 'white';
+            this.ctx.beginPath(); 
+            this.ctx.ellipse(this.width/2, this.height/2 - 50, 70, 70, 0, 0, Math.PI*2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            Draw.patient(this.ctx, this.width/2, this.height/2 - 50, 60, this.currentAilment.id, this.state);
+            this.ctx.restore();
+            
+            // Text Requirement
+            if (this.state === 'PLAY') {
+                this.ctx.fillStyle = '#37474F';
+                this.ctx.font = 'bold 22px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText("Treat " + this.currentAilment.text, this.width/2, 100);
+            }
+        }
+
+        // Tools
+        const isHinting = Date.now() < this.hintTime;
+        
+        this.tableItems.forEach(item => {
+            const isCorrect = item.id === this.currentAilment?.tool;
+            const size = 80 * (item.scale || 1);
+            
+            // Draw Shadow
+            this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            this.ctx.beginPath(); this.ctx.ellipse(item.x, item.y + 30, 30, 10, 0, 0, Math.PI*2); this.ctx.fill();
+
+            // Draw Item
+            Draw.icon(this.ctx, item.type, item.x, item.y, size);
+            
+            // Hint Outline
+            if (isHinting && isCorrect && this.state === 'PLAY') {
+                this.ctx.strokeStyle = '#FFEB3B';
+                this.ctx.lineWidth = 4;
+                this.ctx.beginPath();
+                this.ctx.arc(item.x, item.y, 50, 0, Math.PI*2);
+                this.ctx.stroke();
+                
+                // Arrow
+                this.ctx.fillStyle = '#FFEB3B';
+                this.ctx.beginPath();
+                this.ctx.moveTo(item.x, item.y - 70);
+                this.ctx.lineTo(item.x - 10, item.y - 90);
+                this.ctx.lineTo(item.x + 10, item.y - 90);
+                this.ctx.fill();
+            }
+        });
+
+        // Particles
+        this.particles.forEach(p => {
+            this.ctx.globalAlpha = p.life;
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+        });
+        this.ctx.globalAlpha = 1;
+    }
+}
+
+// Init
+const ctx = document.getElementById('gameCanvas').getContext('2d');
+window.game = new Game();
+
+</script>
+</body>
+</html>
