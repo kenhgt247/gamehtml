@@ -80,7 +80,7 @@
             font-size: 1.2rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
 
-        /* --- CONTROLS (Fix: Luôn hiển thị Joystick) --- */
+        /* --- CONTROLS (Fix: Joystick luôn hiển thị và không biến mất) --- */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 40px;
             width: 140px; height: 140px;
@@ -88,12 +88,12 @@
             border: 4px solid rgba(255,255,255,0.6);
             display: block; /* Luôn hiện */
             z-index: 15;
-            touch-action: none; /* Chặn cuộn trang khi chạm */
+            touch-action: none; /* Quan trọng: Chặn cuộn trang khi chạm vào joystick */
         }
         
-        /* Chỉ ẩn joystick trên màn hình rất lớn (PC) nếu muốn, nhưng giữ lại cho an toàn */
+        /* Tùy chọn: Làm mờ joystick trên màn hình lớn nếu muốn, nhưng để an toàn cứ hiện rõ */
         @media (min-width: 1024px) {
-            #joystick-zone { opacity: 0.3; } /* Mờ đi trên PC */
+            #joystick-zone { opacity: 0.5; } 
             #joystick-zone:hover { opacity: 1; }
         }
 
@@ -104,7 +104,7 @@
             transform: translate(-50%, -50%);
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             border: 3px solid white;
-            pointer-events: none; /* Để touch event xuyên qua zone xử lý */
+            pointer-events: none; /* Để sự kiện chạm xuyên qua vùng cha xử lý */
         }
 
         #hint-btn {
