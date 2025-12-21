@@ -80,7 +80,7 @@
             font-size: 1.2rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
 
-        /* --- CONTROLS (Fix: Joystick luôn hiển thị và không biến mất) --- */
+        /* --- CONTROLS --- */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 40px;
             width: 140px; height: 140px;
@@ -88,10 +88,9 @@
             border: 4px solid rgba(255,255,255,0.6);
             display: block; /* Luôn hiện */
             z-index: 15;
-            touch-action: none; /* Quan trọng: Chặn cuộn trang khi chạm vào joystick */
+            touch-action: none;
         }
         
-        /* Tùy chọn: Làm mờ joystick trên màn hình lớn nếu muốn, nhưng để an toàn cứ hiện rõ */
         @media (min-width: 1024px) {
             #joystick-zone { opacity: 0.5; } 
             #joystick-zone:hover { opacity: 1; }
@@ -104,7 +103,7 @@
             transform: translate(-50%, -50%);
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             border: 3px solid white;
-            pointer-events: none; /* Để sự kiện chạm xuyên qua vùng cha xử lý */
+            pointer-events: none;
         }
 
         #hint-btn {
@@ -180,12 +179,43 @@
             { cat: 'MIXED', items: [ {w:'STAR',e:'⭐'}, {w:'FISH',e:'🐟'}, {w:'BOOK',e:'📖'}, {w:'KEY',e:'🔑'}, {w:'BELL',e:'🔔'} ], distractors: ['🍎','🚗','🐶'] }
         ];
 
-        // --- AUDIO ---
+        // --- AUDIO ENGINE (FIXED FOR IPHONE) ---
         const AudioSys = {
             ctx: null,
-            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            synth: window.speechSynthesis,
+            selectedVoice: null,
+
+            init: function() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Pre-load voices
+                this.loadVoices();
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack for iOS loading delay
+                let attempts = 0;
+                let interval = setInterval(() => {
+                    if (this.selectedVoice || attempts > 10) clearInterval(interval);
+                    this.loadVoices();
+                    attempts++;
+                }, 500);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // Priority: iOS Premium -> Google UK -> Generic GB -> Generic US
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel' || v.name === 'Arthur' || v.name === 'Martha') || 
+                    voices.find(v => v.name.includes('Google UK English Male')) ||
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-US');
+            },
+
             playTone: function(freq, type, duration) {
-                if (!this.ctx) this.init();
                 if(this.ctx.state === 'suspended') this.ctx.resume();
                 const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
                 o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
@@ -194,13 +224,34 @@
                 o.connect(g); g.connect(this.ctx.destination);
                 o.start(); o.stop(this.ctx.currentTime + duration);
             },
+            
             collect: function() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(1000, 'sine', 0.1), 100); },
             wrong: function() { this.playTone(150, 'sawtooth', 0.3); },
+            
             speak: function(text) {
-                window.speechSynthesis.cancel();
+                // iOS Audio Context Resume Hack
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                
+                if (this.synth.speaking) this.synth.cancel();
+
+                // Ensure voice is loaded
+                if (!this.selectedVoice) this.loadVoices();
+
                 const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'en-US'; u.rate = 0.9;
-                window.speechSynthesis.speak(u);
+                
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; // Fallback
+                }
+                
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                
+                // Small delay for iOS to catch up
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
             }
         };
 
@@ -210,7 +261,7 @@
                 this.x = x;
                 this.y = y;
                 this.size = 40;
-                this.speed = 6; // Tăng tốc độ một chút
+                this.speed = 6;
                 this.vx = 0;
                 this.vy = 0;
                 this.emoji = "🏃";
@@ -220,7 +271,6 @@
             update(input, w, h) {
                 let moveX = input.x;
                 let moveY = input.y;
-                // Deadzone cho joystick
                 if(Math.abs(moveX) < 0.1) moveX = 0;
                 if(Math.abs(moveY) < 0.1) moveY = 0;
 
@@ -249,7 +299,7 @@
                 ctx.fillStyle = "rgba(0,0,0,0.2)";
                 ctx.beginPath(); ctx.ellipse(0, 18, 18, 6, 0, 0, Math.PI*2); ctx.fill();
 
-                // FIX LỖI MỜ: Reset fillStyle về đen hoặc màu mặc định trước khi vẽ Emoji
+                // Reset color to avoid ghosting
                 ctx.fillStyle = "#000000"; 
                 
                 // Character
@@ -283,7 +333,6 @@
                 ctx.fillStyle = "rgba(0,0,0,0.15)";
                 ctx.beginPath(); ctx.ellipse(0, 22, 14, 5, 0, 0, Math.PI*2); ctx.fill();
 
-                // FIX LỖI MỜ: Reset fillStyle về đen
                 ctx.fillStyle = "#000000";
 
                 ctx.font = "40px Arial";
@@ -333,12 +382,12 @@
                 window.addEventListener('keydown', e => { keys[e.code] = true; this.updateInput(keys); });
                 window.addEventListener('keyup', e => { keys[e.code] = false; this.updateInput(keys); });
 
-                // Joystick (Improved Logic)
+                // Joystick
                 let startX, startY;
-                const radius = 50; // Bán kính di chuyển của knob
+                const radius = 50;
 
                 const handleMove = (e) => {
-                    e.preventDefault(); // Chặn cuộn trang
+                    e.preventDefault(); 
                     const touch = e.touches[0];
                     const dx = touch.clientX - startX;
                     const dy = touch.clientY - startY;
@@ -361,10 +410,9 @@
                 };
 
                 this.joystickZone.addEventListener('touchstart', e => {
-                    e.preventDefault(); // Chặn cuộn trang
+                    e.preventDefault();
                     const touch = e.touches[0];
                     const rect = this.joystickZone.getBoundingClientRect();
-                    // Tâm của joystick zone
                     startX = rect.left + rect.width / 2;
                     startY = rect.top + rect.height / 2;
                 }, {passive: false});
@@ -387,9 +435,12 @@
                 this.resize();
                 this.level = 1;
                 this.score = 0;
-                AudioSys.init();
-                this.startLevel();
                 
+                // Unlock audio on start
+                if(AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+                AudioSys.init();
+                
+                this.startLevel();
                 this.isRunning = true;
                 this.loop();
             }
@@ -474,6 +525,7 @@
 
             handleCollision(item) {
                 if(item === this.targetItem) {
+                    // Correct
                     item.collected = true;
                     this.score += 100;
                     AudioSys.collect();
@@ -610,6 +662,16 @@
         }
 
         const game = new Game();
+
+        // Fix iOS Audio Context on first touch
+        window.addEventListener('touchstart', function() {
+            if (AudioSys.ctx.state === 'suspended') {
+                AudioSys.ctx.resume();
+            }
+        }, {once:true});
+
+        // Prevent Pull-to-refresh
+        document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
     </script>
 </body>
 </html>
