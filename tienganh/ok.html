@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>StudyCards Kids – British English 🇬🇧🐰</title>
+
+  <!-- Optional confetti (fallback-safe if CDN fails) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root{
+      --bg0:#F6FBFF;
+      --bg1:#ECFFFA;
+      --card:#FFFFFF;
+      --ink:#17212B;
+      --muted:#5B6B7A;
+      --teal:#22C1B8;
+      --pink:#FF5EA8;
+      --yellow:#FFCC49;
+      --shadow: 0 18px 40px rgba(12, 33, 66, .12);
+      --shadow2: 0 10px 22px rgba(12, 33, 66, .10);
+      --r24:24px;
+      --r18:18px;
+      --safeB: env(safe-area-inset-bottom, 0px);
+      --safeT: env(safe-area-inset-top, 0px);
+      --safeL: env(safe-area-inset-left, 0px);
+      --safeR: env(safe-area-inset-right, 0px);
+    }
+
+    *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height:100%; }
+    body{
+      margin:0;
+      font-family: ui-rounded, system-ui, -apple-system, "Nunito", "Quicksand", "Segoe UI", Arial, sans-serif;
+      color:var(--ink);
+      background: radial-gradient(1100px 720px at 20% 10%, #E7FFF5 0%, rgba(231,255,245,0) 60%),
+                  radial-gradient(1000px 700px at 85% 25%, #FFEAF6 0%, rgba(255,234,246,0) 55%),
+                  linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+      touch-action: manipulation;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+
+    .app{
+      position:relative;
+      width:100%;
+      height:100%;
+      padding: calc(16px + var(--safeT)) calc(16px + var(--safeR)) calc(16px + var(--safeB)) calc(16px + var(--safeL));
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      padding:10px 12px;
+      border-radius: var(--r18);
+      background: rgba(255,255,255,.68);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow2);
+    }
+
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      min-width:0;
+    }
+    .mascot{
+      width:42px; height:42px;
+      border-radius: 14px;
+      display:grid; place-items:center;
+      background: linear-gradient(135deg, rgba(34,193,184,.25), rgba(255,94,168,.18));
+      box-shadow: 0 10px 18px rgba(255,94,168,.12);
+      font-size:24px;
+      flex:0 0 auto;
+    }
+    .brand h1{
+      margin:0; font-size:16px; line-height:1.1;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .brand .sub{
+      font-size:12px; color:var(--muted); margin-top:2px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    .chiprow{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .chip{
+      display:flex; align-items:center; gap:7px;
+      padding:8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.85);
+      box-shadow: 0 8px 16px rgba(12,33,66,.08);
+      font-weight:800;
+      font-size:12px;
+      color:#2B3A44;
+    }
+    .chip small{ font-weight:900; color:var(--muted); }
+    .chip .dot{
+      width:9px; height:9px; border-radius:50%;
+      background: var(--teal);
+      box-shadow: 0 0 0 5px rgba(34,193,184,.15);
+    }
+    .chip .dot.muted{ background:#B0BAC6; box-shadow: 0 0 0 5px rgba(176,186,198,.18); }
+
+    .main{
+      flex:1;
+      position:relative;
+      border-radius: var(--r24);
+      background: rgba(255,255,255,.55);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .screen{
+      position:absolute; inset:0;
+      display:none;
+      padding:16px;
+    }
+    .screen.active{ display:flex; flex-direction:column; gap:14px; }
+
+    /* Buttons */
+    .btn{
+      border:none;
+      border-radius: 999px;
+      padding:14px 16px;
+      font-weight:1000;
+      font-size:16px;
+      cursor:pointer;
+      color: #0D1B1E;
+      background: #fff;
+      box-shadow: 0 10px 0 rgba(12,33,66,.12), 0 18px 34px rgba(12,33,66,.12);
+      transform: translateY(0);
+      transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+    }
+    .btn:active{
+      transform: translateY(6px);
+      box-shadow: 0 4px 0 rgba(12,33,66,.12), 0 10px 20px rgba(12,33,66,.10);
+    }
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(34,193,184,1), rgba(34,193,184,.75));
+      color:#06201F;
+    }
+    .btn.pink{
+      background: linear-gradient(135deg, rgba(255,94,168,1), rgba(255,94,168,.75));
+      color:#2B0616;
+    }
+    .btn.yellow{
+      background: linear-gradient(135deg, rgba(255,204,73,1), rgba(255,204,73,.85));
+      color:#2A1C00;
+    }
+    .btn.ghost{
+      background: rgba(255,255,255,.8);
+      box-shadow: 0 10px 0 rgba(12,33,66,.08), 0 18px 34px rgba(12,33,66,.10);
+    }
+    .btn.icon{
+      width:46px; height:46px;
+      padding:0;
+      border-radius: 16px;
+      font-size:18px;
+    }
+
+    .row{ display:flex; gap:10px; }
+    .row > *{ flex:1; }
+
+    .titleBig{
+      font-size:26px;
+      margin:0;
+      letter-spacing:.2px;
+    }
+    .muted{ color:var(--muted); font-weight:800; }
+    .hintline{
+      background: rgba(255,255,255,.78);
+      border-radius: 16px;
+      padding:12px 12px;
+      display:flex; gap:10px; align-items:center;
+      box-shadow: 0 12px 24px rgba(12,33,66,.08);
+    }
+    .hintline .bubble{
+      width:36px; height:36px; border-radius: 14px;
+      display:grid; place-items:center;
+      background: linear-gradient(135deg, rgba(255,204,73,.35), rgba(34,193,184,.25));
+      font-size:18px;
+      flex:0 0 auto;
+    }
+    .hintline .text{ font-size:13px; font-weight:900; color:#1F2C35; line-height:1.3; }
+
+    /* Deck grid */
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    .deck{
+      border-radius: 22px;
+      padding:14px 12px;
+      background: rgba(255,255,255,.85);
+      box-shadow: 0 14px 26px rgba(12,33,66,.10);
+      border: 2px solid rgba(34,193,184,.15);
+      display:flex; flex-direction:column; gap:6px;
+      cursor:pointer;
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .deck:active{ transform: scale(.98); }
+    .deck .emoji{ font-size:34px; }
+    .deck .name{ font-weight:1000; }
+    .deck .meta{ font-size:12px; color:var(--muted); font-weight:900; }
+
+    /* Card */
+    .cardWrap{
+      flex:1;
+      display:flex; flex-direction:column; gap:12px;
+      min-height:0;
+    }
+    .cardArea{
+      flex:1;
+      min-height:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      touch-action: none; /* only here to stop swipe scroll */
+    }
+    .card3d{
+      width: min(420px, 100%);
+      height: min(440px, 62vh);
+      position:relative;
+      perspective: 1100px;
+    }
+    .cardInner{
+      position:absolute; inset:0;
+      transform-style: preserve-3d;
+      transition: transform .55s cubic-bezier(.2,.9,.2,1);
+    }
+    .cardInner.flipped{ transform: rotateY(180deg); }
+    .face{
+      position:absolute; inset:0;
+      border-radius: 26px;
+      background: rgba(255,255,255,.92);
+      box-shadow: var(--shadow);
+      border: 2px solid rgba(255,94,168,.12);
+      backface-visibility: hidden;
+      display:flex; flex-direction:column;
+      padding:16px;
+      overflow:hidden;
+    }
+    .face.back{
+      transform: rotateY(180deg);
+      border: 2px solid rgba(34,193,184,.18);
+    }
+    .cardTop{
+      display:flex; justify-content:space-between; align-items:center;
+      gap:10px;
+    }
+    .pill{
+      padding:8px 10px;
+      border-radius: 999px;
+      background: rgba(34,193,184,.12);
+      font-weight:1000;
+      font-size:12px;
+      color:#0A3C39;
+    }
+    .pill.pink{ background: rgba(255,94,168,.12); color:#4B0D2B; }
+    .bigEmoji{
+      flex:1;
+      display:grid; place-items:center;
+      font-size: 104px;
+      line-height:1;
+      filter: drop-shadow(0 18px 18px rgba(12,33,66,.12));
+    }
+    .word{
+      font-size: 36px;
+      font-weight: 1100;
+      text-align:center;
+      letter-spacing: 1px;
+      margin-top:6px;
+    }
+    .mini{
+      text-align:center;
+      font-size:13px;
+      font-weight:900;
+      color:var(--muted);
+      margin-top:8px;
+    }
+
+    .exampleBox{
+      margin-top:12px;
+      border-radius: 20px;
+      padding:14px 12px;
+      background: rgba(34,193,184,.09);
+      border: 2px dashed rgba(34,193,184,.18);
+      font-weight:1000;
+      font-size:18px;
+      text-align:center;
+      color:#0D2B2B;
+    }
+
+    .controls{
+      display:flex; gap:10px; flex-wrap:wrap;
+      justify-content:center;
+    }
+
+    /* Progress */
+    .progress{
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.75);
+      box-shadow: 0 10px 18px rgba(12,33,66,.08);
+      overflow:hidden;
+      border: 1px solid rgba(12,33,66,.05);
+    }
+    .bar{
+      height:100%;
+      width:0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,204,73,1), rgba(255,94,168,1), rgba(34,193,184,1));
+      transition: width .25s ease;
+    }
+
+    /* Quiz */
+    .quizBox{
+      border-radius: 24px;
+      background: rgba(255,255,255,.86);
+      box-shadow: var(--shadow2);
+      padding:14px;
+      display:flex; flex-direction:column; gap:12px;
+      border: 2px solid rgba(255,204,73,.22);
+    }
+    .quizQ{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+    }
+    .quizQ h2{ margin:0; font-size:18px; }
+    .options{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .opt{
+      border-radius: 22px;
+      padding:14px 12px;
+      background: rgba(255,255,255,.92);
+      border: 2px solid rgba(12,33,66,.06);
+      box-shadow: 0 12px 22px rgba(12,33,66,.10);
+      cursor:pointer;
+      font-weight:1000;
+      min-height:86px;
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px;
+      transition: transform .08s ease, filter .12s ease, border-color .12s ease;
+    }
+    .opt:active{ transform: scale(.98); }
+    .opt .e{ font-size:38px; }
+    .opt .w{ font-size:13px; color:var(--muted); }
+    .opt.good{ border-color: rgba(34,193,184,.75); box-shadow: 0 14px 26px rgba(34,193,184,.15); }
+    .opt.bad{ border-color: rgba(255,94,168,.75); box-shadow: 0 14px 26px rgba(255,94,168,.15); }
+
+    .shake{ animation: shake .18s ease-in-out 0s 2; }
+    @keyframes shake{
+      0%{ transform: translateX(0); }
+      25%{ transform: translateX(-5px); }
+      50%{ transform: translateX(5px); }
+      75%{ transform: translateX(-4px); }
+      100%{ transform: translateX(0); }
+    }
+
+    /* Reward */
+    .reward{
+      flex:1;
+      display:flex; flex-direction:column; gap:12px;
+      justify-content:center; align-items:center;
+      text-align:center;
+    }
+    .bigStars{
+      font-size: 52px;
+      filter: drop-shadow(0 18px 18px rgba(12,33,66,.12));
+    }
+    .stickers{
+      display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+      margin-top:6px;
+    }
+    .sticker{
+      width:62px; height:62px; border-radius: 22px;
+      display:grid; place-items:center;
+      background: rgba(255,255,255,.9);
+      box-shadow: 0 14px 26px rgba(12,33,66,.10);
+      font-size:30px;
+      border: 2px solid rgba(255,204,73,.22);
+    }
+
+    /* Settings */
+    .panel{
+      border-radius: 24px;
+      background: rgba(255,255,255,.86);
+      box-shadow: var(--shadow2);
+      padding:14px;
+      border: 2px solid rgba(34,193,184,.15);
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .line{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      font-weight:1000;
+    }
+    .line small{ font-weight:900; color:var(--muted); }
+    .toggle{
+      width:58px; height:34px; border-radius: 999px;
+      background: rgba(176,186,198,.55);
+      position:relative;
+      box-shadow: inset 0 8px 16px rgba(12,33,66,.10);
+      cursor:pointer;
+      flex:0 0 auto;
+    }
+    .toggle::after{
+      content:"";
+      position:absolute; top:5px; left:5px;
+      width:24px; height:24px; border-radius: 50%;
+      background:#fff;
+      box-shadow: 0 10px 18px rgba(12,33,66,.15);
+      transition: left .18s ease, background .18s ease;
+    }
+    .toggle.on{ background: rgba(34,193,184,.35); }
+    .toggle.on::after{ left:29px; background: #fff; }
+    input[type="range"]{
+      width: 170px;
+      accent-color: var(--teal);
+    }
+
+    /* Footer nav */
+    .nav{
+      display:flex; gap:10px;
+    }
+    .nav .btn{ flex:1; font-size:14px; padding:12px 12px; }
+
+    /* Toast */
+    .toast{
+      position:absolute;
+      left:50%; bottom: calc(16px + var(--safeB));
+      transform: translateX(-50%);
+      background: rgba(23,33,43,.92);
+      color:#fff;
+      padding:10px 12px;
+      border-radius: 999px;
+      font-weight:900;
+      font-size:13px;
+      box-shadow: 0 16px 30px rgba(0,0,0,.22);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease, transform .18s ease;
+      z-index:50;
+      max-width: 92%;
+      text-align:center;
+      line-height:1.2;
+    }
+    .toast.show{
+      opacity:1;
+      transform: translateX(-50%) translateY(-6px);
+    }
+
+    /* Small screens */
+    @media (max-height: 700px){
+      .bigEmoji{ font-size: 92px; }
+      .word{ font-size: 32px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mascot" aria-hidden="true">🐰</div>
+        <div style="min-width:0">
+          <h1 id="top-title">StudyCards Kids</h1>
+          <div class="sub" id="top-sub">British English • Tap START to enable sound</div>
+        </div>
+      </div>
+      <div class="chiprow">
+        <div class="chip" title="Sound">
+          <span class="dot" id="sound-dot"></span>
+          <span id="sound-label">Sound</span>
+        </div>
+        <div class="chip" title="Stars">
+          ⭐ <span id="stars">0</span> <small>stars</small>
+        </div>
+        <div class="chip" title="Streak">
+          🔥 <span id="streak">0</span> <small>streak</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="main" id="main">
+      <!-- START -->
+      <section class="screen active" id="screen-start">
+        <h2 class="titleBig">StudyCards Kids 🇬🇧🐰</h2>
+        <div class="hintline">
+          <div class="bubble">✨</div>
+          <div class="text">
+            Tap <b>START</b> to enable sound on iPhone.<br/>
+            Then learn cards + play a tiny quiz!
+          </div>
+        </div>
+
+        <div style="flex:1; display:grid; place-items:center;">
+          <div style="text-align:center;">
+            <div style="font-size:78px; filter: drop-shadow(0 18px 18px rgba(12,33,66,.12));">📚🌈</div>
+            <div class="muted" style="margin-top:6px; font-size:14px;">British voice • Big buttons • Mobile-first</div>
+          </div>
+        </div>
+
+        <button class="btn primary" id="btn-start">START / Enable Sound 🔊</button>
+        <button class="btn ghost" id="btn-start-muted">START (Mute) 🤫</button>
+
+        <div class="muted" style="font-size:12px; text-align:center; line-height:1.35;">
+          Tip: If you can’t hear, turn off silent mode 🔕 and increase volume.
+        </div>
+      </section>
+
+      <!-- HOME -->
+      <section class="screen" id="screen-home">
+        <h2 class="titleBig" style="margin:0;">Choose a deck</h2>
+        <div class="hintline">
+          <div class="bubble">🧠</div>
+          <div class="text">Learn with cards → then try a quick quiz. Keep a streak to win stickers!</div>
+        </div>
+
+        <div class="grid" id="deck-grid"></div>
+
+        <div class="nav">
+          <button class="btn ghost" id="btn-home-settings">⚙️ Settings</button>
+          <button class="btn yellow" id="btn-home-quicktest">🔊 Voice test</button>
+        </div>
+      </section>
+
+      <!-- LEARN -->
+      <section class="screen" id="screen-learn">
+        <div class="progress" aria-label="progress"><div class="bar" id="learn-bar"></div></div>
+
+        <div class="cardWrap">
+          <div class="hintline" style="margin:0;">
+            <div class="bubble">🐰</div>
+            <div class="text" id="learn-tip">Tap the card to flip. Swipe to next/prev.</div>
+          </div>
+
+          <div class="cardArea" id="cardArea">
+            <div class="card3d">
+              <div class="cardInner" id="cardInner">
+                <div class="face front">
+                  <div class="cardTop">
+                    <div class="pill" id="pill-deck">Deck</div>
+                    <button class="btn icon ghost" id="btn-say-word" title="Say word">🔊</button>
+                  </div>
+                  <div class="bigEmoji" id="card-emoji">🍎</div>
+                  <div class="word" id="card-word">APPLE</div>
+                  <div class="mini" id="card-mini">Tap to flip • Swipe for next</div>
+                </div>
+
+                <div class="face back">
+                  <div class="cardTop">
+                    <div class="pill pink">Example</div>
+                    <button class="btn icon ghost" id="btn-say-example" title="Say example">🔊</button>
+                  </div>
+                  <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:10px;">
+                    <div style="text-align:center; font-size:58px;">🗣️</div>
+                    <div class="exampleBox" id="card-example">I see an apple.</div>
+                    <div class="mini">Tap to flip back</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="btn ghost" id="btn-prev">⬅️ Back</button>
+            <button class="btn yellow" id="btn-flip">Flip 🔄</button>
+            <button class="btn ghost" id="btn-next">Next ➡️</button>
+          </div>
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="btn-learn-home">🏠 Home</button>
+          <button class="btn pink" id="btn-learn-quiz">🎯 Quiz</button>
+        </div>
+      </section>
+
+      <!-- QUIZ -->
+      <section class="screen" id="screen-quiz">
+        <div class="progress" aria-label="quiz-progress"><div class="bar" id="quiz-bar"></div></div>
+
+        <div class="quizBox" id="quizBox">
+          <div class="quizQ">
+            <h2 id="quiz-title">Listen and choose</h2>
+            <button class="btn icon yellow" id="btn-quiz-say" title="Repeat">🔊</button>
+          </div>
+          <div class="muted" style="font-size:13px;" id="quiz-sub">Tap the correct card.</div>
+          <div class="options" id="quiz-options"></div>
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="btn-quiz-home">🏠 Home</button>
+          <button class="btn yellow" id="btn-quiz-backlearn">📚 Learn</button>
+        </div>
+      </section>
+
+      <!-- REWARD -->
+      <section class="screen" id="screen-reward">
+        <div class="reward">
+          <div style="font-size:20px; font-weight:1100;">Level Up! 🎉</div>
+          <div class="bigStars" id="reward-stars">⭐⭐⭐</div>
+          <div class="muted" id="reward-text">Great job!</div>
+          <div class="stickers" id="reward-stickers"></div>
+          <div class="row" style="width:min(520px, 100%);">
+            <button class="btn primary" id="btn-reward-continue">Continue ▶</button>
+            <button class="btn ghost" id="btn-reward-home">Home 🏠</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="screen" id="screen-settings">
+        <h2 class="titleBig" style="margin:0;">Settings ⚙️</h2>
+
+        <div class="panel">
+          <div class="line">
+            <div>
+              Sound <small id="set-sound-sub">WebAudio + TTS</small>
+            </div>
+            <div class="toggle" id="toggle-mute" role="switch" aria-checked="false"></div>
+          </div>
+
+          <div class="line">
+            <div>
+              TTS Speed <small id="set-rate-sub">For kids</small>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input type="range" min="0.80" max="1.00" step="0.01" id="rate-range" />
+              <div class="chip"><span id="rate-label">0.92</span></div>
+            </div>
+          </div>
+
+          <div class="line">
+            <div>
+              Accent <small>Locked</small>
+            </div>
+            <div class="chip">🇬🇧 en-GB</div>
+          </div>
+
+          <div class="line">
+            <div>
+              Voice <small id="voice-label">Loading…</small>
+            </div>
+            <button class="btn yellow" id="btn-voice-test">Test 🔊</button>
+          </div>
+
+          <div class="hintline" style="margin:0;">
+            <div class="bubble">💡</div>
+            <div class="text">If iPhone sounds “weird”, your device may not expose an en-GB voice in Safari. We still try en-GB first.</div>
+          </div>
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="btn-settings-back">⬅️ Back</button>
+          <button class="btn primary" id="btn-settings-home">🏠 Home</button>
+        </div>
+      </section>
+
+      <div class="toast" id="toast">Hello</div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // DATA (8 decks, 12–16 cards each)
+    // =========================
+    const DECKS = [
+      {
+        id: "fruits",
+        name: "Fruits",
+        icon: "🍓",
+        words: [
+          { en: "apple", emoji: "🍎", example: "I see an apple." },
+          { en: "banana", emoji: "🍌", example: "A banana is yellow." },
+          { en: "grape", emoji: "🍇", example: "Grapes are small." },
+          { en: "orange", emoji: "🍊", example: "An orange is sweet." },
+          { en: "pear", emoji: "🍐", example: "A pear is green." },
+          { en: "peach", emoji: "🍑", example: "A peach is soft." },
+          { en: "strawberry", emoji: "🍓", example: "I like strawberries." },
+          { en: "watermelon", emoji: "🍉", example: "Watermelon is big." },
+          { en: "cherry", emoji: "🍒", example: "Cherries are red." },
+          { en: "pineapple", emoji: "🍍", example: "Pineapple tastes yummy." },
+          { en: "lemon", emoji: "🍋", example: "Lemon is sour." },
+          { en: "mango", emoji: "🥭", example: "Mango is tasty." },
+        ]
+      },
+      {
+        id: "animals",
+        name: "Animals",
+        icon: "🦊",
+        words: [
+          { en: "cat", emoji: "🐱", example: "The cat is cute." },
+          { en: "dog", emoji: "🐶", example: "The dog is happy." },
+          { en: "lion", emoji: "🦁", example: "A lion is strong." },
+          { en: "tiger", emoji: "🐯", example: "The tiger runs fast." },
+          { en: "elephant", emoji: "🐘", example: "An elephant is big." },
+          { en: "monkey", emoji: "🐵", example: "A monkey can climb." },
+          { en: "rabbit", emoji: "🐰", example: "A rabbit can hop." },
+          { en: "bear", emoji: "🐻", example: "A bear is fluffy." },
+          { en: "fish", emoji: "🐟", example: "A fish can swim." },
+          { en: "bird", emoji: "🐦", example: "A bird can fly." },
+          { en: "frog", emoji: "🐸", example: "A frog can jump." },
+          { en: "panda", emoji: "🐼", example: "A panda is lovely." },
+        ]
+      },
+      {
+        id: "colors",
+        name: "Colours",
+        icon: "🎨",
+        words: [
+          { en: "red", emoji: "🟥", example: "Red is bright." },
+          { en: "blue", emoji: "🟦", example: "Blue is calm." },
+          { en: "green", emoji: "🟩", example: "Green is fresh." },
+          { en: "yellow", emoji: "🟨", example: "Yellow is sunny." },
+          { en: "pink", emoji: "🩷", example: "Pink is pretty." },
+          { en: "purple", emoji: "🟪", example: "Purple looks cool." },
+          { en: "orange", emoji: "🟧", example: "Orange is warm." },
+          { en: "brown", emoji: "🟫", example: "Brown is earthy." },
+          { en: "black", emoji: "⬛", example: "Black is dark." },
+          { en: "white", emoji: "⬜", example: "White is clean." },
+          { en: "gold", emoji: "🟨", example: "Gold shines." },
+          { en: "silver", emoji: "⬜", example: "Silver sparkles." },
+        ]
+      },
+      {
+        id: "body",
+        name: "Body",
+        icon: "🧍",
+        words: [
+          { en: "eye", emoji: "👁️", example: "I have two eyes." },
+          { en: "ear", emoji: "👂", example: "My ears can hear." },
+          { en: "nose", emoji: "👃", example: "My nose can smell." },
+          { en: "mouth", emoji: "👄", example: "My mouth can smile." },
+          { en: "hand", emoji: "✋", example: "Wash your hands." },
+          { en: "foot", emoji: "🦶", example: "My feet can walk." },
+          { en: "head", emoji: "🧠", example: "Touch your head." },
+          { en: "hair", emoji: "💇", example: "My hair is soft." },
+          { en: "teeth", emoji: "🦷", example: "Brush your teeth." },
+          { en: "arm", emoji: "💪", example: "My arms are strong." },
+          { en: "leg", emoji: "🦵", example: "My legs can run." },
+          { en: "heart", emoji: "❤️", example: "My heart beats." },
+        ]
+      },
+      {
+        id: "toys",
+        name: "Toys",
+        icon: "🧸",
+        words: [
+          { en: "ball", emoji: "⚽", example: "Kick the ball." },
+          { en: "robot", emoji: "🤖", example: "The robot can wave." },
+          { en: "doll", emoji: "🪆", example: "This doll is cute." },
+          { en: "kite", emoji: "🪁", example: "Fly the kite." },
+          { en: "car", emoji: "🚗", example: "The toy car is fast." },
+          { en: "train", emoji: "🚂", example: "The train goes choo-choo." },
+          { en: "blocks", emoji: "🧱", example: "Build with blocks." },
+          { en: "puzzle", emoji: "🧩", example: "A puzzle is fun." },
+          { en: "teddy", emoji: "🧸", example: "Hug the teddy." },
+          { en: "yo-yo", emoji: "🪀", example: "A yo-yo goes up." },
+          { en: "drum", emoji: "🥁", example: "Tap the drum." },
+          { en: "book", emoji: "📘", example: "Read a book." },
+        ]
+      },
+      {
+        id: "nature",
+        name: "Nature",
+        icon: "🌿",
+        words: [
+          { en: "sun", emoji: "☀️", example: "The sun is bright." },
+          { en: "moon", emoji: "🌙", example: "The moon is up." },
+          { en: "star", emoji: "⭐", example: "A star can shine." },
+          { en: "tree", emoji: "🌳", example: "The tree is tall." },
+          { en: "flower", emoji: "🌸", example: "This flower is pretty." },
+          { en: "rain", emoji: "🌧️", example: "Rain goes pitter-patter." },
+          { en: "cloud", emoji: "☁️", example: "A cloud is soft." },
+          { en: "snow", emoji: "❄️", example: "Snow is cold." },
+          { en: "leaf", emoji: "🍃", example: "A leaf is green." },
+          { en: "rock", emoji: "🪨", example: "The rock is hard." },
+          { en: "river", emoji: "🏞️", example: "The river flows." },
+          { en: "rainbow", emoji: "🌈", example: "A rainbow has colours." },
+        ]
+      },
+      {
+        id: "vehicles",
+        name: "Vehicles",
+        icon: "🚦",
+        words: [
+          { en: "car", emoji: "🚗", example: "The car can go." },
+          { en: "bus", emoji: "🚌", example: "The bus is big." },
+          { en: "train", emoji: "🚆", example: "The train is long." },
+          { en: "plane", emoji: "✈️", example: "The plane can fly." },
+          { en: "boat", emoji: "🚤", example: "The boat can float." },
+          { en: "bike", emoji: "🚲", example: "I can ride a bike." },
+          { en: "truck", emoji: "🚚", example: "The truck is strong." },
+          { en: "taxi", emoji: "🚕", example: "A taxi is yellow." },
+          { en: "ambulance", emoji: "🚑", example: "The ambulance helps." },
+          { en: "fire engine", emoji: "🚒", example: "Fire engines are red." },
+          { en: "helicopter", emoji: "🚁", example: "A helicopter goes up." },
+          { en: "rocket", emoji: "🚀", example: "A rocket is fast." },
+        ]
+      },
+      {
+        id: "food",
+        name: "Food",
+        icon: "🍽️",
+        words: [
+          { en: "pizza", emoji: "🍕", example: "Pizza is yummy." },
+          { en: "burger", emoji: "🍔", example: "A burger is big." },
+          { en: "cake", emoji: "🍰", example: "Cake is sweet." },
+          { en: "egg", emoji: "🥚", example: "An egg is small." },
+          { en: "milk", emoji: "🥛", example: "Milk is white." },
+          { en: "bread", emoji: "🍞", example: "Bread smells nice." },
+          { en: "rice", emoji: "🍚", example: "Rice is warm." },
+          { en: "noodles", emoji: "🍜", example: "Noodles are long." },
+          { en: "ice cream", emoji: "🍦", example: "Ice cream is cold." },
+          { en: "cheese", emoji: "🧀", example: "Cheese is tasty." },
+          { en: "banana", emoji: "🍌", example: "Banana is yellow." },
+          { en: "apple", emoji: "🍎", example: "Apple is crunchy." },
+        ]
+      },
+    ];
+
+    const STICKERS = ["⭐","🐰","🌈","🎁","🦄","🍓","🚀","🎨","🧸","🏆"];
+
+    // =========================
+    // UTIL
+    // =========================
+    const $ = (id) => document.getElementById(id);
+    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+    const cap = (s) => (s || "").trim().replace(/\s+/g," ").replace(/^\w/, c => c.toUpperCase());
+    const shuffle = (arr) => {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    // =========================
+    // Toast
+    // =========================
+    let toastTimer = null;
+    function toast(msg){
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=> t.classList.remove("show"), 1400);
+    }
+
+    // =========================
+    // Audio System (WebAudio + Web Speech, iOS safe)
+    // =========================
+    const AudioSys = {
+      ctx: null,
+      muted: false,
+      rate: 0.92,
+
+      voices: [],
+      voicesReady: false,
+
+      init(){
+        try{
+          if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }catch(e){
+          // AudioContext may fail, still allow app to run
+          this.ctx = null;
+        }
+        this.loadVoices();
+        this.updateVoiceLabel();
+      },
+
+      async unlock(){
+        // call on user gesture (START)
+        this.init();
+        if (this.muted) return;
+        try{
+          if(this.ctx && this.ctx.state === "suspended") await this.ctx.resume();
+          if(this.ctx){
+            // silent ping (1 frame buffer) helps iOS unlock
+            const b = this.ctx.createBuffer(1, 1, 22050);
+            const s = this.ctx.createBufferSource();
+            s.buffer = b;
+            s.connect(this.ctx.destination);
+            s.start(0);
+          }
+        }catch(e){}
+      },
+
+      beep(freq=660, type="sine", dur=0.10){
+        if(this.muted) return;
+        if(!this.ctx) return;
+        try{
+          if(this.ctx.state === "suspended") this.ctx.resume();
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.type = type;
+          o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          g.gain.setValueAtTime(0.14, this.ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+          o.connect(g); g.connect(this.ctx.destination);
+          o.start();
+          o.stop(this.ctx.currentTime + dur);
+        }catch(e){}
+      },
+
+      sfxTap(){ this.beep(740, "triangle", 0.05); },
+      sfxGood(){ this.beep(650, "sine", 0.10); setTimeout(()=>this.beep(980,"sine",0.12), 90); },
+      sfxBad(){ this.beep(170, "sawtooth", 0.16); },
+
+      loadVoices(){
+        const synth = window.speechSynthesis;
+        if(!synth) return;
+
+        const pull = () => {
+          const v = synth.getVoices ? (synth.getVoices() || []) : [];
+          if(v.length){
+            this.voices = v;
+            this.voicesReady = true;
+            this.updateVoiceLabel();
+          }
+        };
+
+        pull();
+        try{
+          synth.onvoiceschanged = () => pull();
+        }catch(e){}
+
+        // retry a bit (iOS Safari often loads late)
+        let tries = 0;
+        const timer = setInterval(() => {
+          pull();
+          tries++;
+          if(this.voicesReady || tries >= 25) clearInterval(timer);
+        }, 100);
+      },
+
+      pickVoice(lang="en-GB"){
+        const v = this.voices || [];
+        const L = (lang || "").toLowerCase();
+
+        // exact en-GB first (prefer localService)
+        let best =
+          v.find(x => (x.lang||"").toLowerCase() === L && x.localService) ||
+          v.find(x => (x.lang||"").toLowerCase() === L) ||
+          null;
+
+        // fallback: any en-* if no en-GB
+        if(!best && L.startsWith("en-")){
+          best =
+            v.find(x => (x.lang||"").toLowerCase().startsWith("en-") && x.localService) ||
+            v.find(x => (x.lang||"").toLowerCase().startsWith("en-")) ||
+            null;
+        }
+        return best;
+      },
+
+      updateVoiceLabel(){
+        const lab = $("voice-label");
+        if(!lab) return;
+        if(!window.speechSynthesis){
+          lab.textContent = "No speechSynthesis";
+          return;
+        }
+        if(!this.voicesReady){
+          lab.textContent = "Loading…";
+          return;
+        }
+        const v = this.pickVoice("en-GB");
+        lab.textContent = v ? `${v.name} (${v.lang})` : "Default voice (fallback)";
+      },
+
+      speak(text, lang="en-GB"){
+        if(this.muted) return;
+        const synth = window.speechSynthesis;
+        if(!synth || typeof SpeechSynthesisUtterance === "undefined"){
+          this.sfxTap();
+          toast("No TTS on this device.");
+          return;
+        }
+
+        if(!this.voicesReady) this.loadVoices();
+
+        // iOS: cancel then wait a bit, or it may drop speech
+        try{ synth.cancel(); }catch(e){}
+
+        const toSay = String(text || "").trim();
+        if(!toSay) return;
+
+        setTimeout(() => {
+          try{
+            const u = new SpeechSynthesisUtterance(toSay);
+            u.lang = lang;              // force British preference
+            u.rate = clamp(this.rate, 0.80, 1.00);
+            u.pitch = 1.0;
+
+            const voice = this.pickVoice(lang);
+            if(voice) u.voice = voice;
+
+            synth.speak(u);
+          }catch(e){
+            this.sfxTap();
+          }
+        }, 70);
+      }
+    };
+
+    // =========================
+    // App State Machine
+    // =========================
+    const App = {
+      state: "START", // START | HOME | LEARN | QUIZ | REWARD | SETTINGS
+      deck: null,
+      deckIndex: 0,
+      order: [],
+      i: 0,
+      flipped: false,
+
+      stars: 0,
+      streak: 0,
+      quiz: {
+        pool: [],
+        current: null,
+        total: 0,
+        done: 0,
+        lock: false
+      },
+
+      start(muted=false){
+        AudioSys.muted = !!muted;
+        AudioSys.init();
+        AudioSys.unlock(); // iOS safe
+        this.updateSoundChip();
+        this.streak = 0;
+        this.setState("HOME");
+        toast(muted ? "Muted 🤫" : "Sound on 🔊");
+      },
+
+      setState(s){
+        this.state = s;
+        // screens
+        ["start","home","learn","quiz","reward","settings"].forEach(k=>{
+          $("screen-"+k).classList.toggle("active", s === k.toUpperCase());
+        });
+
+        // topbar text
+        if(s === "START"){
+          $("top-sub").textContent = "British English • Tap START to enable sound";
+        }else if(s === "HOME"){
+          $("top-sub").textContent = "Pick a deck • Learn then quiz";
+        }else if(s === "LEARN"){
+          $("top-sub").textContent = `Deck: ${this.deck?.name || ""} • Tap to flip • Swipe`;
+        }else if(s === "QUIZ"){
+          $("top-sub").textContent = `Quiz • Listen and choose`;
+        }else if(s === "REWARD"){
+          $("top-sub").textContent = `Rewards • Stickers time`;
+        }else if(s === "SETTINGS"){
+          $("top-sub").textContent = `Settings • en-GB voice preference`;
+        }
+
+        this.renderAll();
+      },
+
+      chooseDeck(deckId){
+        const d = DECKS.find(x => x.id === deckId);
+        if(!d) return;
+        this.deck = d;
+        this.deckIndex = DECKS.findIndex(x=>x.id===deckId);
+        this.order = shuffle(d.words.map((_,idx)=>idx));
+        this.i = 0;
+        this.flipped = false;
+        this.quizReset();
+        AudioSys.sfxTap();
+        this.setState("LEARN");
+        this.maybeTutorial();
+        this.renderLearnCard();
+      },
+
+      maybeTutorial(){
+        const tip = $("learn-tip");
+        tip.textContent = "Tap the card to flip. Swipe left/right to change cards.";
+        setTimeout(()=> {
+          if(this.state === "LEARN"){
+            tip.textContent = "Press 🔊 to hear British English. You got this! 🐰";
+          }
+        }, 2400);
+      },
+
+      currentWord(){
+        if(!this.deck) return null;
+        const idx = this.order[this.i] ?? 0;
+        return this.deck.words[idx] || null;
+      },
+
+      flip(){
+        this.flipped = !this.flipped;
+        $("cardInner").classList.toggle("flipped", this.flipped);
+        AudioSys.sfxTap();
+      },
+
+      next(){
+        if(!this.deck) return;
+        this.flipped = false;
+        $("cardInner").classList.remove("flipped");
+        this.i = (this.i + 1) % this.order.length;
+        AudioSys.sfxTap();
+        this.renderLearnCard();
+      },
+
+      prev(){
+        if(!this.deck) return;
+        this.flipped = false;
+        $("cardInner").classList.remove("flipped");
+        this.i = (this.i - 1 + this.order.length) % this.order.length;
+        AudioSys.sfxTap();
+        this.renderLearnCard();
+      },
+
+      speakWord(){
+        const w = this.currentWord();
+        if(!w) return;
+        AudioSys.speak(cap(w.en), "en-GB");
+      },
+
+      speakExample(){
+        const w = this.currentWord();
+        if(!w) return;
+        AudioSys.speak(w.example, "en-GB");
+      },
+
+      // -------- QUIZ --------
+      quizReset(){
+        this.quiz.pool = shuffle(this.deck ? this.deck.words.slice() : []);
+        this.quiz.total = Math.min(10, this.quiz.pool.length); // short session
+        this.quiz.done = 0;
+        this.quiz.lock = false;
+        this.quiz.current = null;
+      },
+
+      startQuiz(){
+        if(!this.deck) return;
+        AudioSys.sfxTap();
+        this.quizReset();
+        this.setState("QUIZ");
+        this.nextQuiz();
+      },
+
+      nextQuiz(){
+        if(!this.deck) return;
+        this.quiz.lock = false;
+
+        if(this.quiz.done >= this.quiz.total){
+          this.reward();
+          return;
+        }
+
+        // pick next
+        const remaining = this.quiz.pool.length ? this.quiz.pool : shuffle(this.deck.words.slice());
+        this.quiz.current = remaining.shift();
+        this.quiz.pool = remaining;
+
+        // Speak prompt
+        this.sayQuizPrompt();
+
+        // Render options
+        this.renderQuizOptions();
+        this.renderQuizBar();
+      },
+
+      sayQuizPrompt(){
+        const w = this.quiz.current;
+        if(!w) return;
+        // simple kids phrase
+        AudioSys.speak("Find " + cap(w.en), "en-GB");
+      },
+
+      renderQuizOptions(){
+        const w = this.quiz.current;
+        const box = $("quiz-options");
+        box.innerHTML = "";
+        if(!w || !this.deck) return;
+
+        // choose 3 distractors
+        const pool = this.deck.words.filter(x => x !== w);
+        const picks = shuffle(pool).slice(0, 3);
+        const opts = shuffle([w, ...picks]);
+
+        opts.forEach(opt => {
+          const b = document.createElement("button");
+          b.className = "opt";
+          b.innerHTML = `<div class="e">${opt.emoji}</div><div class="w">${cap(opt.en)}</div>`;
+          b.addEventListener("click", () => this.chooseOption(opt, b));
+          box.appendChild(b);
+        });
+
+        $("quiz-title").textContent = "Listen and choose";
+        $("quiz-sub").textContent = "Tap the correct card.";
+      },
+
+      chooseOption(opt, btnEl){
+        if(this.quiz.lock) return;
+        this.quiz.lock = true;
+
+        const correct = (opt === this.quiz.current);
+        const box = $("quizBox");
+
+        if(correct){
+          btnEl.classList.add("good");
+          AudioSys.sfxGood();
+          this.streak++;
+          this.stars += 1 + (this.streak >= 3 ? 1 : 0);
+          if(this.streak === 3) toast("COMBO! 🔥🔥🔥");
+          else toast("Great job! ⭐");
+          this.quiz.done++;
+
+          this.burstConfetti();
+          this.renderTopStats();
+          this.renderQuizBar();
+
+          setTimeout(()=> this.nextQuiz(), 520);
+        }else{
+          btnEl.classList.add("bad");
+          AudioSys.sfxBad();
+          this.streak = 0;
+          box.classList.add("shake");
+          try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
+          toast("Try again! 💪");
+
+          // quick repeat
+          setTimeout(() => {
+            box.classList.remove("shake");
+            this.sayQuizPrompt();
+            this.quiz.lock = false;
+          }, 520);
+        }
+      },
+
+      reward(){
+        this.setState("REWARD");
+        const earned = Math.max(1, Math.min(3, Math.floor(this.streak / 2) + 1));
+        const starsText = "⭐".repeat(earned);
+        $("reward-stars").textContent = starsText;
+        $("reward-text").textContent = earned >= 3 ? "Amazing! You are a star! 🏆" : (earned === 2 ? "Nice work! Keep going! 🐰" : "Good job! Let’s do more!");
+        this.renderStickers(earned);
+        this.burstConfetti(true);
+        this.renderTopStats();
+      },
+
+      renderStickers(n){
+        const wrap = $("reward-stickers");
+        wrap.innerHTML = "";
+        const picks = shuffle(STICKERS).slice(0, n + 2);
+        picks.forEach(s => {
+          const d = document.createElement("div");
+          d.className = "sticker";
+          d.textContent = s;
+          wrap.appendChild(d);
+        });
+      },
+
+      burstConfetti(big=false){
+        try{
+          if(typeof confetti === "function"){
+            confetti({
+              particleCount: big ? 160 : 60,
+              spread: big ? 90 : 55,
+              origin: { y: 0.65 }
+            });
+          }
+        }catch(e){}
+      },
+
+      // -------- RENDER --------
+      renderTopStats(){
+        $("stars").textContent = String(this.stars);
+        $("streak").textContent = String(this.streak);
+        this.updateSoundChip();
+        AudioSys.updateVoiceLabel();
+      },
+
+      updateSoundChip(){
+        const dot = $("sound-dot");
+        const lab = $("sound-label");
+        const muted = !!AudioSys.muted;
+        dot.classList.toggle("muted", muted);
+        lab.textContent = muted ? "Muted" : "Sound";
+      },
+
+      renderHome(){
+        const grid = $("deck-grid");
+        grid.innerHTML = "";
+        DECKS.forEach(d => {
+          const el = document.createElement("div");
+          el.className = "deck";
+          el.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div class="emoji">${d.icon}</div>
+              <div class="pill" style="background: rgba(255,204,73,.18); color:#463000;">${d.words.length} cards</div>
+            </div>
+            <div class="name">${d.name}</div>
+            <div class="meta">Tap to learn + quiz</div>
+          `;
+          el.addEventListener("click", () => this.chooseDeck(d.id));
+          grid.appendChild(el);
+        });
+      },
+
+      renderLearnCard(){
+        const w = this.currentWord();
+        if(!w || !this.deck) return;
+
+        $("pill-deck").textContent = this.deck.name;
+        $("card-emoji").textContent = w.emoji;
+        $("card-word").textContent = cap(w.en).toUpperCase();
+        $("card-example").textContent = w.example;
+
+        // progress
+        const p = (this.i + 1) / this.order.length;
+        $("learn-bar").style.width = Math.round(p * 100) + "%";
+        $("card-mini").textContent = `${this.i + 1}/${this.order.length} • Tap to flip • Swipe`;
+        this.renderTopStats();
+      },
+
+      renderQuizBar(){
+        const p = this.quiz.total ? (this.quiz.done / this.quiz.total) : 0;
+        $("quiz-bar").style.width = Math.round(p * 100) + "%";
+        this.renderTopStats();
+      },
+
+      renderSettings(){
+        const t = $("toggle-mute");
+        t.classList.toggle("on", !!AudioSys.muted);
+        t.setAttribute("aria-checked", AudioSys.muted ? "true" : "false");
+        $("rate-range").value = String(AudioSys.rate);
+        $("rate-label").textContent = Number(AudioSys.rate).toFixed(2);
+        AudioSys.updateVoiceLabel();
+        this.renderTopStats();
+      },
+
+      renderAll(){
+        this.renderTopStats();
+        if(this.state === "HOME") this.renderHome();
+        if(this.state === "LEARN") this.renderLearnCard();
+        if(this.state === "QUIZ") this.renderQuizBar();
+        if(this.state === "SETTINGS") this.renderSettings();
+      }
+    };
+
+    // =========================
+    // Gesture handling (swipe card only)
+    // =========================
+    (function setupGestures(){
+      const area = $("cardArea");
+      const inner = $("cardInner");
+      let sx=0, sy=0, t0=0, tracking=false;
+
+      const onStart = (e) => {
+        if(App.state !== "LEARN") return;
+        const p = e.touches ? e.touches[0] : e;
+        sx = p.clientX; sy = p.clientY; t0 = Date.now();
+        tracking = true;
+      };
+
+      const onMove = (e) => {
+        if(!tracking || App.state !== "LEARN") return;
+        // prevent scroll only while swiping on card
+        if(e.cancelable) e.preventDefault();
+      };
+
+      const onEnd = (e) => {
+        if(!tracking || App.state !== "LEARN") return;
+        const p = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
+        const dx = p.clientX - sx;
+        const dy = p.clientY - sy;
+        const dt = Date.now() - t0;
+        tracking = false;
+
+        // tap = flip (small movement)
+        if(Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 350){
+          App.flip();
+          return;
+        }
+
+        // swipe threshold
+        if(Math.abs(dx) > 55 && Math.abs(dy) < 60){
+          if(dx < 0) App.next();
+          else App.prev();
+        }
+      };
+
+      // Touch
+      area.addEventListener("touchstart", onStart, {passive:true});
+      area.addEventListener("touchmove", onMove, {passive:false});
+      area.addEventListener("touchend", onEnd, {passive:true});
+
+      // Mouse (desktop)
+      let mouseDown=false;
+      area.addEventListener("mousedown", (e)=>{ mouseDown=true; onStart(e); });
+      window.addEventListener("mousemove", (e)=>{ if(mouseDown) onMove(e); });
+      window.addEventListener("mouseup", (e)=>{ if(mouseDown){ mouseDown=false; onEnd(e);} });
+
+      // Keyboard
+      window.addEventListener("keydown", (e)=>{
+        if(App.state === "LEARN"){
+          if(e.code === "ArrowRight") App.next();
+          if(e.code === "ArrowLeft") App.prev();
+          if(e.code === "Space") App.flip();
+        }
+      });
+    })();
+
+    // =========================
+    // Wire UI buttons
+    // =========================
+    $("btn-start").addEventListener("click", ()=> App.start(false));
+    $("btn-start-muted").addEventListener("click", ()=> App.start(true));
+
+    $("btn-home-settings").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("SETTINGS"); });
+    $("btn-home-quicktest").addEventListener("click", ()=> { AudioSys.sfxTap(); AudioSys.speak("Hello! Let's learn with British English.", "en-GB"); });
+
+    $("btn-prev").addEventListener("click", ()=> App.prev());
+    $("btn-next").addEventListener("click", ()=> App.next());
+    $("btn-flip").addEventListener("click", ()=> App.flip());
+    $("btn-say-word").addEventListener("click", ()=> App.speakWord());
+    $("btn-say-example").addEventListener("click", ()=> App.speakExample());
+
+    $("btn-learn-home").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("HOME"); });
+    $("btn-learn-quiz").addEventListener("click", ()=> App.startQuiz());
+
+    $("btn-quiz-say").addEventListener("click", ()=> { AudioSys.sfxTap(); App.sayQuizPrompt(); });
+    $("btn-quiz-home").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("HOME"); });
+    $("btn-quiz-backlearn").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("LEARN"); App.renderLearnCard(); });
+
+    $("btn-reward-continue").addEventListener("click", ()=> {
+      AudioSys.sfxTap();
+      // continue quiz session in same deck
+      if(App.deck){
+        App.setState("QUIZ");
+        App.quizReset();
+        App.nextQuiz();
+      }else{
+        App.setState("HOME");
+      }
+    });
+    $("btn-reward-home").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("HOME"); });
+
+    $("btn-settings-back").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState(App.deck ? "LEARN" : "HOME"); });
+    $("btn-settings-home").addEventListener("click", ()=> { AudioSys.sfxTap(); App.setState("HOME"); });
+
+    $("toggle-mute").addEventListener("click", async ()=>{
+      AudioSys.muted = !AudioSys.muted;
+      App.renderSettings();
+      App.updateSoundChip();
+      toast(AudioSys.muted ? "Muted 🤫" : "Sound on 🔊");
+      if(!AudioSys.muted){
+        await AudioSys.unlock(); // re-unlock if user toggles on
+        AudioSys.sfxTap();
+      }
+    });
+
+    $("rate-range").addEventListener("input", (e)=>{
+      const v = Number(e.target.value);
+      AudioSys.rate = clamp(v, 0.80, 1.00);
+      $("rate-label").textContent = AudioSys.rate.toFixed(2);
+    });
+
+    $("btn-voice-test").addEventListener("click", async ()=>{
+      AudioSys.sfxTap();
+      await AudioSys.unlock();
+      AudioSys.speak("British English test. Find the apple.", "en-GB");
+      App.renderSettings();
+    });
+
+    // =========================
+    // Boot
+    // =========================
+    (function boot(){
+      AudioSys.init();
+      App.renderAll();
+      // keep voice label updated in the first seconds
+      setTimeout(()=> AudioSys.updateVoiceLabel(), 500);
+      setTimeout(()=> AudioSys.updateVoiceLabel(), 1500);
+      setTimeout(()=> AudioSys.updateVoiceLabel(), 2800);
+    })();
+  </script>
+</body>
+</html>
