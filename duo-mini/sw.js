@@ -1,5 +1,5 @@
 const CACHE = "duo-mini-v1";
-const APP_SHELL = ["/", "/index.html", "/sw.js", "/content/path.json"];
+const APP_SHELL = ["./", "./index.html", "./sw.js", "./content/path.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL)));
