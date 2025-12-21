@@ -1,0 +1,19 @@
+{
+  "id": "lesson-02",
+  "title": "Animals 1",
+  "steps": [
+    {
+      "type": "listen_choose",
+      "prompt": "Find cat",
+      "lang": "en-GB",
+      "speak": "Find cat",
+      "answer": "cat",
+      "choices": [
+        { "id": "cat", "label": "cat", "emoji": "🐱", "audio": "" },
+        { "id": "dog", "label": "dog", "emoji": "🐶", "audio": "" },
+        { "id": "lion", "label": "lion", "emoji": "🦁", "audio": "" },
+        { "id": "fish", "label": "fish", "emoji": "🐟", "audio": "" }
+      ]
+    }
+  ]
+}
