@@ -184,12 +184,49 @@
     </div>
 
     <script>
-        // --- AUDIO ENGINE ---
+        // --- AUDIO ENGINE (Fixed for iPhone British Voice) ---
         const AudioSys = {
             ctx: null,
-            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            synth: window.speechSynthesis,
+            selectedVoice: null,
+
+            init: function() { 
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+                this.loadVoices();
+                
+                // Safari iOS load giọng chậm, cần sự kiện này
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack: Thử load lại liên tục trong vài giây đầu để bắt giọng trên iPhone
+                let attempts = 0;
+                let interval = setInterval(() => {
+                    if (this.selectedVoice || attempts > 10) clearInterval(interval);
+                    this.loadVoices();
+                    attempts++;
+                }, 500);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // THỨ TỰ ƯU TIÊN TÌM GIỌNG ANH-ANH:
+                // 1. "Daniel" (Giọng nam chuẩn nhất trên iOS)
+                // 2. "Arthur" / "Martha" (Giọng Anh khác trên iOS)
+                // 3. "Google UK English" (Trên Android/Chrome)
+                // 4. Bất kỳ giọng nào có mã 'en-GB'
+                
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel') || 
+                    voices.find(v => v.name === 'Arthur') || 
+                    voices.find(v => v.name === 'Martha') || 
+                    voices.find(v => v.name.includes('Google UK English')) || 
+                    voices.find(v => v.lang === 'en-GB');
+            },
+
             playTone: function(freq, type, duration) {
-                if (!this.ctx) this.init();
                 if(this.ctx.state === 'suspended') this.ctx.resume();
                 const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
                 o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
@@ -199,7 +236,27 @@
                 o.start(); o.stop(this.ctx.currentTime + duration);
             },
             ding: function() { this.playTone(800, 'sine', 0.1); setTimeout(()=>this.playTone(1200, 'sine', 0.2), 100); },
-            oops: function() { this.playTone(150, 'sawtooth', 0.3); }
+            oops: function() { this.playTone(150, 'sawtooth', 0.3); },
+            
+            speak: function(text) {
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                if (this.synth.speaking) this.synth.cancel();
+                if (!this.selectedVoice) this.loadVoices();
+
+                const u = new SpeechSynthesisUtterance(text);
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; 
+                }
+                
+                u.rate = 0.9;
+                u.pitch = 1.1;
+                
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
+            }
         };
 
         // --- ART ENGINE (Canvas Drawing) ---
@@ -390,6 +447,7 @@
                 document.getElementById('game-ui').classList.remove('hidden');
                 this.level = 0;
                 this.score = 0;
+                AudioSys.init(); // Initialize audio
                 this.loadLevel(0);
             }
 
@@ -424,10 +482,6 @@
 
                 // Draw Right
                 Art.setCtx(this.c2);
-                // Filter out found differences so they appear "Corrected" (or keep them to show diff? Usually we want them to match L when found.
-                // Actually, common gameplay: Image R has errors. When found, we circle them.
-                // Let's keep drawing the difference until found? Or remove difference to match Left?
-                // Let's keep difference visible but mark it.
                 Art.render(this.levelData, true, this.levelData.diffs);
                 
                 // Draw markers on both
@@ -478,10 +532,6 @@
                 // Check against differences
                 let hit = false;
                 
-                // Need to check coordinates based on Right Side logic (since we usually click errors)
-                // If clicking Left side, map to Right side coords? Or allow clicking target on Left?
-                // Allow clicking either side is most kid-friendly.
-                
                 // Check all active differences
                 this.levelData.diffs.forEach(d => {
                     if(this.foundDiffs.includes(d.id)) return;
@@ -503,6 +553,7 @@
                         hit = true;
                         this.score += 100;
                         AudioSys.ding();
+                        AudioSys.speak("Good job!"); // Thêm lời khen
                         this.render(); // Redraw to show marker
                         
                         if(this.foundDiffs.length === this.levelData.diffs.length) {
@@ -564,11 +615,13 @@
                 document.getElementById('win-msg').innerText = `Level ${this.level+1} Complete!`;
                 document.getElementById('game-ui').classList.add('hidden');
                 document.getElementById('win-screen').classList.remove('hidden');
+                AudioSys.speak("Awesome!");
             }
 
             loseLevel() {
                 document.getElementById('game-ui').classList.add('hidden');
                 document.getElementById('lose-screen').classList.remove('hidden');
+                AudioSys.speak("Try again!");
             }
 
             nextLevel() {
@@ -594,8 +647,13 @@
         }
 
         const game = new Game();
-        // Init draw on load to prevent blank
-        window.onload = () => {};
+        
+        // Fix iOS Audio Context on first touch
+        window.addEventListener('touchstart', function() {
+            if (AudioSys.ctx.state === 'suspended') {
+                AudioSys.ctx.resume();
+            }
+        }, {once:true});
 
     </script>
 </body>
