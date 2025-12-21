@@ -232,9 +232,36 @@
             { word: "CAKE", emoji: "🎂" }, { word: "PIZZA", emoji: "🍕" }, { word: "BURGER", emoji: "🍔" }
         ];
 
-        // --- AUDIO ENGINE ---
+        // --- AUDIO ENGINE (FIXED FOR IPHONE) ---
         const AudioSys = {
             ctx: new (window.AudioContext || window.webkitAudioContext)(),
+            synth: window.speechSynthesis,
+            selectedVoice: null,
+
+            init: function() {
+                // Pre-load voices
+                this.loadVoices();
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                // Hack for iOS loading delay
+                setInterval(() => {
+                    if(!this.selectedVoice) this.loadVoices();
+                }, 1000);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if(voices.length === 0) return;
+
+                // Priority: iOS Premium -> Google UK -> Generic GB -> Generic US
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel' || v.name === 'Arthur') || 
+                    voices.find(v => v.name.includes('Google UK English Male')) ||
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-US');
+            },
+
             playTone: function(freq, type, duration) {
                 if(this.ctx.state === 'suspended') this.ctx.resume();
                 const osc = this.ctx.createOscillator();
@@ -248,19 +275,40 @@
                 osc.start();
                 osc.stop(this.ctx.currentTime + duration);
             },
+            
             playCorrect: function() {
                 this.playTone(600, 'sine', 0.1);
                 setTimeout(() => this.playTone(800, 'sine', 0.2), 100);
             },
+            
             playWrong: function() {
                 this.playTone(150, 'sawtooth', 0.3);
             },
+            
             speak: function(text) {
-                window.speechSynthesis.cancel();
+                // iOS Audio Context Resume Hack
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                
+                if (this.synth.speaking) this.synth.cancel();
+
+                // Ensure voice is loaded
+                if (!this.selectedVoice) this.loadVoices();
+
                 const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'en-US';
+                
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; // Fallback
+                }
+                
                 u.rate = 0.9;
-                window.speechSynthesis.speak(u);
+                u.pitch = 1.1;
+                
+                // Small delay for iOS to catch up
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
             }
         };
 
@@ -303,10 +351,15 @@
             showStart() {
                 this.hideAll();
                 document.getElementById('start-screen').classList.remove('hidden');
+                AudioSys.init(); // Initialize audio system on user interaction
             }
 
             showMap() {
                 this.hideAll();
+                // Ensure audio is ready on iOS (requires user gesture)
+                if (AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+                AudioSys.init();
+
                 const data = this.loadData();
                 const grid = document.getElementById('level-grid');
                 grid.innerHTML = '';
@@ -349,7 +402,7 @@
                 document.getElementById('game-screen').classList.remove('hidden');
                 
                 // Speak target after a slight delay
-                setTimeout(() => this.speakTarget(), 500);
+                setTimeout(() => this.speakTarget(), 600);
             }
 
             generateContent(count) {
@@ -388,6 +441,7 @@
                     this.isLocked = true;
                     el.classList.add('correct');
                     AudioSys.playCorrect();
+                    AudioSys.speak("Great!");
                     this.score += 10 + (this.hearts * 5); // Bonus score
                     document.getElementById('hud-score').innerText = this.score;
                     
@@ -470,6 +524,13 @@
 
         // --- INIT ---
         const game = new Game();
+
+        // Fix iOS Audio Context on first touch
+        window.addEventListener('touchstart', function() {
+            if (AudioSys.ctx.state === 'suspended') {
+                AudioSys.ctx.resume();
+            }
+        }, {once:true});
 
     </script>
 </body>
