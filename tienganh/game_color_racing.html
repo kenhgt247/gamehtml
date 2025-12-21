@@ -1,0 +1,838 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Color Racing - Kids Learning</title>
+<style>
+:root {
+--primary: #FFD700;
+--accent: #FF4500;
+--bg: #2c3e50;
+--ui-bg: rgba(255, 255, 255, 0.9);
+--font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+```
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+body, html {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background-color: var(--bg);
+    overflow: hidden; /* Prevent scroll */
+    font-family: var(--font-main);
+}
+
+/* CONTAINER */
+#game-container {
+    position: relative; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+
+canvas {
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    background: #34495e; /* Road color */
+    border-radius: 12px;
+}
+
+/* UI LAYERS */
+.ui-layer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    z-index: 10; pointer-events: none;
+}
+
+.ui-content {
+    pointer-events: auto;
+    background: var(--ui-bg);
+    padding: 20px; border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    max-width: 85%;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+h1 { margin: 0 0 10px; color: var(--accent); font-size: 2rem; }
+p { font-size: 1.2rem; color: #333; margin-bottom: 20px; line-height: 1.4; }
+
+.btn {
+    background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+    color: white; border: none; padding: 15px 40px;
+    font-size: 1.5rem; border-radius: 50px;
+    cursor: pointer; font-weight: bold;
+    box-shadow: 0 5px 0 #1B5E20;
+    transition: transform 0.1s;
+}
+.btn:active { transform: translateY(5px); box-shadow: none; }
+.btn.secondary { background: linear-gradient(to bottom, #2196F3, #1565C0); box-shadow: 0 5px 0 #0D47A1; }
+
+/* HUD */
+#hud {
+    position: absolute; top: 0; left: 0; width: 100%;
+    padding: max(10px, env(safe-area-inset-top)) 15px 0 15px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 5; pointer-events: none;
+}
+.hud-item { pointer-events: auto; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 1.1rem; display: flex; align-items: center; gap: 5px; }
+.btn-icon { width: 40px; height: 40px; border-radius: 50%; border: none; background: white; font-size: 1.2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: center; align-items: center; }
+
+/* JOYSTICK AREA */
+#joystick-zone {
+    position: absolute; bottom: 20px; left: 20px; 
+    width: 150px; height: 150px; z-index: 5;
+    /* Visible for debug, transparent in prod usually, keeping it vague hint */
+}
+
+/* ACTIONS AREA */
+#action-zone {
+    position: absolute; bottom: 30px; right: 30px;
+    display: flex; gap: 15px; z-index: 5;
+}
+
+/* ANIMATIONS */
+@keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.shake { animation: shake 0.5s; }
+@keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-10px); } 50% { transform: translateX(10px); } 75% { transform: translateX(-10px); } 100% { transform: translateX(0); } }
+
+/* UTILS */
+.hidden { display: none !important; }
+
+```
+
+</style>
+</head>
+<body>
+
+<div id="game-container">
+<canvas id="gameCanvas"></canvas>
+
+```
+<div id="hud" class="hidden">
+    <div style="display:flex; gap:10px;">
+        <button id="btnPause" class="btn-icon">⏸</button>
+        <button id="btnMute" class="btn-icon">🔊</button>
+    </div>
+    <div class="hud-item">Level: <span id="lblLevel">1</span></div>
+    <div class="hud-item" style="color:red">❤ <span id="lblHearts">3</span></div>
+</div>
+
+<div id="action-zone" class="hidden">
+    <button id="btnHint" class="btn-icon" style="width:60px; height:60px; font-size:1.5rem; background:#FFEB3B;">💡</button>
+    <button id="btnReplayTTS" class="btn-icon" style="width:60px; height:60px; font-size:1.5rem; background:#81D4FA;">🗣</button>
+</div>
+
+<div id="screen-start" class="ui-layer">
+    <div class="ui-content">
+        <h1>Color Racing 🚗</h1>
+        <p>Drive the car to the correct color!</p>
+        <button id="btnStart" class="btn">START GAME</button>
+    </div>
+</div>
+
+<div id="screen-pause" class="ui-layer hidden">
+    <div class="ui-content">
+        <h1>PAUSED</h1>
+        <button id="btnResume" class="btn">RESUME</button>
+        <br><br>
+        <button id="btnQuit" class="btn secondary" style="font-size:1rem; padding:10px 20px;">HOME</button>
+    </div>
+</div>
+
+<div id="screen-gameover" class="ui-layer hidden">
+    <div class="ui-content">
+        <h1 id="msgGameOver">Game Over</h1>
+        <p id="subMsgGameOver">Try again!</p>
+        <button id="btnRestart" class="btn">REPLAY</button>
+    </div>
+</div>
+
+```
+
+</div>
+
+<script>
+/**
+
+* SENIOR ENGINEER CODE STRUCTURE
+* 1. CONSTANTS & CONFIG
+
+
+* 2. AUDIO SYSTEM (Unlock, Synthesis, Osc)
+
+
+* 3. INPUT SYSTEM (Virtual Joystick, Keyboard)
+
+
+* 4. GAME ENTITIES (Player, Target, Particle)
+
+
+* 5. GAME ENGINE (Loop, Logic, Render)
+*/
+
+
+
+// ==============================
+// 1. CONSTANTS
+// ==============================
+const COLORS = [
+{ name: "RED", hex: "#FF5252" },
+{ name: "BLUE", hex: "#448AFF" },
+{ name: "GREEN", hex: "#69F0AE" },
+{ name: "YELLOW", hex: "#FFFF00" },
+{ name: "PURPLE", hex: "#E040FB" },
+{ name: "ORANGE", hex: "#FFAB40" }
+];
+
+const CFG = {
+totalLevels: 30,
+baseSpeed: 3,
+maxHearts: 3,
+hitCooldown: 700, // ms
+hintDuration: 2500, // ms
+hintsPerLevel: 3
+};
+
+// ==============================
+// 2. AUDIO SYSTEM (iOS Optimized)
+// ==============================
+class AudioSys {
+constructor() {
+this.ctx = null;
+this.isMuted = false;
+this.voices = [];
+this.voice = null;
+
+```
+    // Load voices
+    if (&#39;speechSynthesis&#39; in window) {
+        window.speechSynthesis.onvoiceschanged = () =&gt; this.loadVoices();
+        this.loadVoices();
+    }
+}
+
+loadVoices() {
+    const all = window.speechSynthesis.getVoices();
+    // Priority: en-GB -&gt; en-US -&gt; en-*
+    this.voice = all.find(v =&gt; v.lang === &#39;en-GB&#39;) || 
+                 all.find(v =&gt; v.lang === &#39;en-US&#39;) || 
+                 all.find(v =&gt; v.lang.startsWith(&#39;en&#39;));
+}
+
+init() {
+    // Unlock AudioContext on user interaction
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+        this.ctx = new AudioContext();
+        this.ctx.resume().then(() =&gt; {
+            // Play silent buffer to force unlock
+            const buffer = this.ctx.createBuffer(1, 1, 22050);
+            const source = this.ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.ctx.destination);
+            source.start(0);
+        });
+    }
+}
+
+toggleMute() {
+    this.isMuted = !this.isMuted;
+    if (this.isMuted) window.speechSynthesis.cancel();
+    return this.isMuted;
+}
+
+beep(type) {
+    if (this.isMuted || !this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    const now = this.ctx.currentTime;
+    if (type === &#39;win&#39;) {
+        osc.type = &#39;sine&#39;;
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === &#39;lose&#39;) {
+        osc.type = &#39;sawtooth&#39;;
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === &#39;ui&#39;) {
+        osc.type = &#39;sine&#39;;
+        osc.frequency.setValueAtTime(800, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+}
+
+speak(text) {
+    if (this.isMuted || !(&#39;speechSynthesis&#39; in window)) return;
+    
+    // Cancel current to prevent overlap/queue buildup on iOS
+    window.speechSynthesis.cancel();
+
+    setTimeout(() =&gt; {
+        const u = new SpeechSynthesisUtterance(text);
+        if (this.voice) u.voice = this.voice;
+        u.lang = &#39;en-GB&#39;; // fallback
+        u.rate = 0.9;
+        u.pitch = 1.1;
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+    }, 50); // Tiny delay for iOS safety
+}
+
+```
+
+}
+
+// ==============================
+// 3. INPUT SYSTEM
+// ==============================
+class InputHandler {
+constructor(canvas) {
+this.keys = {};
+this.stick = { x: 0, y: 0, active: false };
+this.touchId = null;
+this.origin = { x: 0, y: 0 };
+this.radius = 50;
+
+```
+    // Keyboard
+    window.addEventListener(&#39;keydown&#39;, e =&gt; this.keys[e.code] = true);
+    window.addEventListener(&#39;keyup&#39;, e =&gt; this.keys[e.code] = false);
+
+    // Touch Joystick
+    canvas.addEventListener(&#39;touchstart&#39;, e =&gt; this.handleStart(e), { passive: false });
+    canvas.addEventListener(&#39;touchmove&#39;, e =&gt; this.handleMove(e), { passive: false });
+    canvas.addEventListener(&#39;touchend&#39;, e =&gt; this.handleEnd(e), { passive: false });
+}
+
+handleStart(e) {
+    e.preventDefault();
+    for (let i = 0; i &lt; e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        // Only left side for joystick
+        if (t.clientX &lt; window.innerWidth / 2) {
+            this.touchId = t.identifier;
+            this.origin = { x: t.clientX, y: t.clientY };
+            this.stick = { x: 0, y: 0, active: true };
+            break;
+        }
+    }
+}
+
+handleMove(e) {
+    e.preventDefault();
+    if (!this.stick.active) return;
+    for (let i = 0; i &lt; e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.touchId) {
+            const t = e.changedTouches[i];
+            let dx = t.clientX - this.origin.x;
+            let dy = t.clientY - this.origin.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist &gt; this.radius) {
+                const angle = Math.atan2(dy, dx);
+                dx = Math.cos(angle) * this.radius;
+                dy = Math.sin(angle) * this.radius;
+            }
+            
+            this.stick.x = dx / this.radius;
+            this.stick.y = dy / this.radius;
+            break;
+        }
+    }
+}
+
+handleEnd(e) {
+    e.preventDefault();
+    for (let i = 0; i &lt; e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.touchId) {
+            this.stick = { x: 0, y: 0, active: false };
+            this.touchId = null;
+            break;
+        }
+    }
+}
+
+getVector() {
+    let x = 0, y = 0;
+    // Keyboard
+    if (this.keys[&#39;ArrowUp&#39;] || this.keys[&#39;KeyW&#39;]) y -= 1;
+    if (this.keys[&#39;ArrowDown&#39;] || this.keys[&#39;KeyS&#39;]) y += 1;
+    if (this.keys[&#39;ArrowLeft&#39;] || this.keys[&#39;KeyA&#39;]) x -= 1;
+    if (this.keys[&#39;ArrowRight&#39;] || this.keys[&#39;KeyD&#39;]) x += 1;
+
+    // Joystick override
+    if (this.stick.active) {
+        x = this.stick.x;
+        y = this.stick.y;
+    }
+
+    // Normalize
+    const len = Math.sqrt(x*x + y*y);
+    if (len &gt; 1) { x /= len; y /= len; }
+    
+    return { x, y };
+}
+
+```
+
+}
+
+// ==============================
+// 4. GAME CLASSES
+// ==============================
+class Player {
+constructor(x, y) {
+this.x = x; this.y = y;
+this.size = 40;
+this.angle = 0;
+this.speed = 0;
+}
+
+```
+update(dt, inputVec) {
+    const speed = CFG.baseSpeed * (60 * dt); // frame rate independent
+    
+    if (inputVec.x !== 0 || inputVec.y !== 0) {
+        this.x += inputVec.x * speed;
+        this.y += inputVec.y * speed;
+        this.angle = Math.atan2(inputVec.y, inputVec.x);
+    }
+
+    // Bounds
+    this.x = Math.max(this.size, Math.min(game.width - this.size, this.x));
+    this.y = Math.max(this.size, Math.min(game.height - this.size, this.y));
+}
+
+draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    
+    // Car Body
+    ctx.fillStyle = &#39;#EEE&#39;;
+    ctx.fillRect(-20, -15, 40, 30);
+    // Roof
+    ctx.fillStyle = &#39;#333&#39;;
+    ctx.fillRect(-5, -12, 15, 24);
+    // Wheels
+    ctx.fillStyle = &#39;#000&#39;;
+    ctx.fillRect(-15, -18, 10, 5); // FL
+    ctx.fillRect(-15, 13, 10, 5);  // FR
+    ctx.fillRect(10, -18, 10, 5);  // BL
+    ctx.fillRect(10, 13, 10, 5);   // BR
+    // Headlights
+    ctx.fillStyle = &#39;#FFEB3B&#39;;
+    ctx.beginPath(); ctx.arc(20, -10, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(20, 10, 3, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+}
+
+```
+
+}
+
+class Target {
+constructor(colorData, x, y) {
+this.color = colorData;
+this.x = x; this.y = y;
+this.radius = 35;
+this.pulse = 0;
+}
+
+```
+draw(ctx, isHinted) {
+    this.pulse += 0.05;
+    const r = isHinted ? this.radius + Math.sin(this.pulse)*5 : this.radius;
+    
+    ctx.beginPath();
+    ctx.fillStyle = this.color.hex;
+    ctx.arc(this.x, this.y, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = &#39;#FFF&#39;;
+    ctx.stroke();
+
+    if (isHinted) {
+        ctx.strokeStyle = &#39;#FFEB3B&#39;;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+    }
+}
+
+```
+
+}
+
+class Particle {
+constructor(x, y, color) {
+this.x = x; this.y = y;
+this.color = color;
+this.vx = (Math.random() - 0.5) * 10;
+this.vy = (Math.random() - 0.5) * 10;
+this.life = 1.0;
+this.size = Math.random() * 8 + 4;
+}
+update() {
+this.x += this.vx;
+this.y += this.vy;
+this.vy += 0.5; // gravity
+this.life -= 0.02;
+}
+draw(ctx) {
+ctx.globalAlpha = this.life;
+ctx.fillStyle = this.color;
+ctx.fillRect(this.x, this.y, this.size, this.size);
+ctx.globalAlpha = 1.0;
+}
+}
+
+// ==============================
+// 5. MAIN GAME ENGINE
+// ==============================
+class Game {
+constructor() {
+this.canvas = document.getElementById('gameCanvas');
+this.ctx = this.canvas.getContext('2d');
+this.audio = new AudioSys();
+this.input = new InputHandler(this.canvas);
+
+```
+    this.state = &#39;MENU&#39;; // MENU, PLAYING, PAUSED, OVER, WIN
+    this.level = 1;
+    this.hearts = CFG.maxHearts;
+    this.targets = [];
+    this.particles = [];
+    this.player = null;
+    this.goalColor = null;
+    
+    this.lastHitTime = 0;
+    this.hintEndTime = 0;
+    this.hintsLeft = CFG.hintsPerLevel;
+    
+    this.resize();
+    window.addEventListener(&#39;resize&#39;, () =&gt; this.resize());
+    
+    // Loop binding
+    this.lastTime = 0;
+    this.loop = this.loop.bind(this);
+    requestAnimationFrame(this.loop);
+    
+    this.setupUI();
+}
+
+resize() {
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
+}
+
+setupUI() {
+    // Screens
+    const hideAll = () =&gt; document.querySelectorAll(&#39;.ui-layer&#39;).forEach(el =&gt; el.classList.add(&#39;hidden&#39;));
+    
+    // START
+    document.getElementById(&#39;btnStart&#39;).onclick = () =&gt; {
+        this.audio.init();
+        hideAll();
+        document.getElementById(&#39;hud&#39;).classList.remove(&#39;hidden&#39;);
+        document.getElementById(&#39;action-zone&#39;).classList.remove(&#39;hidden&#39;);
+        this.startLevel(1);
+    };
+
+    // PAUSE / RESUME
+    document.getElementById(&#39;btnPause&#39;).onclick = () =&gt; {
+        if (this.state === &#39;PLAYING&#39;) {
+            this.state = &#39;PAUSED&#39;;
+            document.getElementById(&#39;screen-pause&#39;).classList.remove(&#39;hidden&#39;);
+            this.audio.beep(&#39;ui&#39;);
+        }
+    };
+    document.getElementById(&#39;btnResume&#39;).onclick = () =&gt; {
+        document.getElementById(&#39;screen-pause&#39;).classList.add(&#39;hidden&#39;);
+        this.state = &#39;PLAYING&#39;;
+        this.lastTime = performance.now(); // reset delta prevents jump
+    };
+    document.getElementById(&#39;btnQuit&#39;).onclick = () =&gt; location.reload();
+
+    // MUTE
+    const btnMute = document.getElementById(&#39;btnMute&#39;);
+    btnMute.onclick = () =&gt; {
+        const m = this.audio.toggleMute();
+        btnMute.textContent = m ? &#39;🔇&#39; : &#39;🔊&#39;;
+        btnMute.style.opacity = m ? &#39;0.5&#39; : &#39;1&#39;;
+    };
+
+    // HINT
+    const btnHint = document.getElementById(&#39;btnHint&#39;);
+    btnHint.onclick = () =&gt; {
+        if (this.state !== &#39;PLAYING&#39; || this.hintsLeft &lt;= 0) return;
+        this.hintsLeft--;
+        this.hintEndTime = Date.now() + CFG.hintDuration;
+        this.audio.beep(&#39;ui&#39;);
+        btnHint.style.opacity = this.hintsLeft &gt; 0 ? &#39;1&#39; : &#39;0.3&#39;;
+    };
+
+    // REPLAY VOICE
+    document.getElementById(&#39;btnReplayTTS&#39;).onclick = () =&gt; {
+        if (this.goalColor) this.audio.speak(&quot;Find &quot; + this.goalColor.name);
+    };
+
+    // RESTART
+    document.getElementById(&#39;btnRestart&#39;).onclick = () =&gt; {
+        hideAll();
+        this.startLevel(this.level &gt; CFG.totalLevels ? 1 : this.level);
+    };
+}
+
+startLevel(lvl) {
+    this.level = lvl;
+    this.state = &#39;PLAYING&#39;;
+    this.hearts = CFG.maxHearts;
+    this.hintsLeft = CFG.hintsPerLevel;
+    document.getElementById(&#39;lblLevel&#39;).textContent = this.level;
+    document.getElementById(&#39;lblHearts&#39;).textContent = this.hearts;
+    document.getElementById(&#39;btnHint&#39;).style.opacity = &#39;1&#39;;
+
+    // Gen Level
+    this.player = new Player(this.width / 2, this.height / 2);
+    this.targets = [];
+    this.particles = [];
+
+    // Difficulty: More targets, mixed colors
+    const numTargets = Math.min(3 + Math.floor(this.level / 3), 10);
+    // Pick available colors for this level (Levels 1-5 only 3 colors, then more)
+    const availableColors = COLORS.slice(0, Math.min(3 + Math.floor(this.level/5), COLORS.length));
+    
+    // Pick Goal
+    this.goalColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+    
+    // Spawn Targets (ensure at least one correct)
+    this.spawnTarget(this.goalColor); 
+    for(let i=1; i&lt;numTargets; i++) {
+        this.spawnTarget(availableColors[Math.floor(Math.random() * availableColors.length)]);
+    }
+
+    // Announce
+    setTimeout(() =&gt; {
+        this.audio.speak(`Find ${this.goalColor.name}`);
+    }, 500);
+}
+
+spawnTarget(color) {
+    // Try not to overlap player
+    let x, y, d;
+    let safe = false;
+    while(!safe) {
+        x = Math.random() * (this.width - 100) + 50;
+        y = Math.random() * (this.height - 100) + 50;
+        d = Math.hypot(x - this.player.x, y - this.player.y);
+        if(d &gt; 150) safe = true; // safe distance
+    }
+    this.targets.push(new Target(color, x, y));
+}
+
+checkCollisions() {
+    const now = Date.now();
+    if (now - this.lastHitTime &lt; CFG.hitCooldown) return;
+
+    for (let i = 0; i &lt; this.targets.length; i++) {
+        const t = this.targets[i];
+        const dist = Math.hypot(t.x - this.player.x, t.y - this.player.y);
+        
+        // Collision threshold
+        if (dist &lt; (this.player.size/2 + t.radius)) {
+            if (t.color.name === this.goalColor.name) {
+                this.handleWin();
+            } else {
+                this.handleFail();
+            }
+            this.lastHitTime = now;
+            break;
+        }
+    }
+}
+
+handleWin() {
+    this.state = &#39;WIN&#39;;
+    this.audio.beep(&#39;win&#39;);
+    this.audio.speak(&quot;Great job!&quot;);
+    
+    // Confetti
+    for(let i=0; i&lt;50; i++) {
+        this.particles.push(new Particle(this.player.x, this.player.y, this.goalColor.hex));
+    }
+
+    setTimeout(() =&gt; {
+        if(this.level &gt;= CFG.totalLevels) {
+            this.showGameOver(true);
+        } else {
+            this.startLevel(this.level + 1);
+        }
+    }, 2000);
+}
+
+handleFail() {
+    this.hearts--;
+    document.getElementById(&#39;lblHearts&#39;).textContent = this.hearts;
+    this.audio.beep(&#39;lose&#39;);
+    
+    // Visual shake
+    document.body.classList.add(&#39;shake&#39;);
+    setTimeout(() =&gt; document.body.classList.remove(&#39;shake&#39;), 500);
+
+    if (this.hearts &lt;= 0) {
+        this.showGameOver(false);
+    } else {
+         this.audio.speak(&quot;Try again&quot;);
+    }
+}
+
+showGameOver(win) {
+    this.state = &#39;OVER&#39;;
+    document.getElementById(&#39;screen-gameover&#39;).classList.remove(&#39;hidden&#39;);
+    const h1 = document.getElementById(&#39;msgGameOver&#39;);
+    const p = document.getElementById(&#39;subMsgGameOver&#39;);
+    
+    if (win) {
+        h1.textContent = &quot;YOU WON!&quot;;
+        h1.style.color = &quot;gold&quot;;
+        p.textContent = &quot;All 30 levels completed!&quot;;
+        this.audio.speak(&quot;Congratulations! You won!&quot;);
+    } else {
+        h1.textContent = &quot;GAME OVER&quot;;
+        h1.style.color = &quot;red&quot;;
+        p.textContent = &quot;Good try! Play again?&quot;;
+        this.audio.speak(&quot;Game Over&quot;);
+    }
+}
+
+update(dt) {
+    if (this.state !== &#39;PLAYING&#39; &amp;&amp; this.state !== &#39;WIN&#39;) return;
+
+    const vec = this.input.getVector();
+    this.player.update(dt, vec);
+
+    if (this.state === &#39;PLAYING&#39;) {
+        this.checkCollisions();
+    }
+
+    // Particles
+    for(let i=this.particles.length-1; i&gt;=0; i--) {
+        this.particles[i].update();
+        if(this.particles[i].life &lt;= 0) this.particles.splice(i, 1);
+    }
+}
+
+draw() {
+    // Clear
+    this.ctx.fillStyle = &#39;#34495e&#39;;
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    // Draw Road Grid (Decor)
+    this.ctx.strokeStyle = &#39;rgba(255,255,255,0.1)&#39;;
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([20, 20]);
+    this.ctx.beginPath();
+    for(let x=0; x&lt;this.width; x+=100) { this.ctx.moveTo(x,0); this.ctx.lineTo(x,this.height); }
+    for(let y=0; y&lt;this.height; y+=100) { this.ctx.moveTo(0,y); this.ctx.lineTo(this.width,y); }
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    // Entities
+    const showHint = Date.now() &lt; this.hintEndTime;
+    
+    this.targets.forEach(t =&gt; {
+        const isTarget = t.color.name === this.goalColor.name;
+        t.draw(this.ctx, showHint &amp;&amp; isTarget);
+        
+        // Draw Arrow if hint
+        if (showHint &amp;&amp; isTarget) {
+            this.drawHintArrow(t);
+        }
+    });
+
+    this.player.draw(this.ctx);
+
+    // Particles
+    this.particles.forEach(p =&gt; p.draw(this.ctx));
+    
+    // Text overlay for goal (always visible at top)
+    if (this.state === &#39;PLAYING&#39;) {
+        this.ctx.fillStyle = &quot;white&quot;;
+        this.ctx.font = &quot;bold 24px Arial&quot;;
+        this.ctx.textAlign = &quot;center&quot;;
+        this.ctx.fillText(`Find ${this.goalColor.name}`, this.width/2, 40 + (window.safeAreaInsetTop || 0));
+    }
+
+    // Joystick Debug (Optional visual)
+    if (this.input.stick.active) {
+        this.ctx.beginPath();
+        this.ctx.fillStyle = &#39;rgba(255,255,255,0.2)&#39;;
+        this.ctx.arc(this.input.origin.x, this.input.origin.y, 50, 0, Math.PI*2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.fillStyle = &#39;rgba(255,255,255,0.5)&#39;;
+        const knobX = this.input.origin.x + this.input.stick.x * 50;
+        const knobY = this.input.origin.y + this.input.stick.y * 50;
+        this.ctx.arc(knobX, knobY, 20, 0, Math.PI*2);
+        this.ctx.fill();
+    }
+}
+
+drawHintArrow(target) {
+    const dx = target.x - this.player.x;
+    const dy = target.y - this.player.y;
+    const angle = Math.atan2(dy, dx);
+    
+    this.ctx.save();
+    this.ctx.translate(this.player.x, this.player.y);
+    this.ctx.rotate(angle);
+    this.ctx.fillStyle = &quot;#FFEB3B&quot;;
+    this.ctx.beginPath();
+    this.ctx.moveTo(50, 0);
+    this.ctx.lineTo(40, -10);
+    this.ctx.lineTo(40, 10);
+    this.ctx.fill();
+    this.ctx.restore();
+}
+
+loop(timestamp) {
+    const dt = (timestamp - this.lastTime) / 1000;
+    this.lastTime = timestamp;
+    
+    this.update(dt);
+    this.draw();
+    
+    requestAnimationFrame(this.loop);
+}
+
+```
+
+}
+
+// Start
+window.game = new Game();
+
+</script>
+
+</body>
+</html>
