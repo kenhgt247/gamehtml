@@ -89,7 +89,7 @@
         <div id="feedback">Great Job!</div>
 
         <div id="task-card" style="display:none;">
-            <div id="speaker-btn" onclick="game.speakCurrentWord()">🇬🇧 🔊</div>
+            <div id="speaker-btn" onclick="game.speakCurrentWord()">🔊</div>
             <div id="target-word">APPLE</div>
         </div>
 
@@ -160,31 +160,42 @@
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
         
-        // --- HỆ THỐNG ÂM THANH (Web Audio & Speech Synthesis) ---
+        // --- HỆ THỐNG ÂM THANH CHUẨN ANH-ANH (Smart Voice) ---
         const synth = window.speechSynthesis;
-        let britishVoice = null;
-
-        // Cố gắng tải giọng Anh-Anh khi trình duyệt sẵn sàng
-        window.speechSynthesis.onvoiceschanged = () => {
-             const voices = window.speechSynthesis.getVoices();
-             // Tìm giọng có lang chứ 'GB' hoặc 'UK'
-             britishVoice = voices.find(v => v.lang.includes('GB') || v.lang.includes('UK'));
-        };
-
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let selectedVoice = null;
+
+        function loadVoices() {
+            const voices = synth.getVoices();
+            if(voices.length === 0) return;
+
+            // Tìm giọng Daniel (iOS) hoặc Google UK
+            selectedVoice = voices.find(v => v.name === 'Daniel' || v.name === 'Arthur' || v.name === 'Martha') ||
+                            voices.find(v => v.name.includes('Google UK English')) ||
+                            voices.find(v => v.lang === 'en-GB');
+        }
+        
+        // Kích hoạt tìm giọng
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        // Hack: Check lại liên tục trên iOS
+        let vInterval = setInterval(() => { if(selectedVoice) clearInterval(vInterval); else loadVoices(); }, 500);
+
         // Hàm tạo hiệu ứng âm thanh beep/ting đơn giản
         function playSoundfx(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
             const now = audioCtx.currentTime;
+            
             if (type === 'win') {
-                // Sound: Ting ting!
-                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.setValueAtTime(800, now + 0.1);
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.linearRampToValueAtTime(800, now + 0.1);
                 gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.4);
                 osc.start(now); osc.stop(now + 0.4);
             } else if (type === 'lose') {
-                // Sound: Bonk!
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(100, now + 0.2);
                 gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
                 osc.start(now); osc.stop(now + 0.3);
@@ -299,23 +310,26 @@
 
             // --- CHỨC NĂNG ĐỌC TỪ (QUAN TRỌNG: GIỌNG ANH-ANH) ---
             speakCurrentWord() {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
                 if (synth.speaking) { synth.cancel(); }
+                if (!selectedVoice) loadVoices(); // Load lại nếu chưa có
+
                 const utterThis = new SpeechSynthesisUtterance(this.targetWord);
                 
-                // Thử lấy lại danh sách giọng nếu chưa tìm thấy lúc đầu
-                if (!britishVoice) {
-                     const voices = window.speechSynthesis.getVoices();
-                     britishVoice = voices.find(v => v.lang.includes('GB') || v.lang.includes('UK'));
-                }
-
                 // Gán giọng nếu tìm thấy
-                if (britishVoice) {
-                    utterThis.voice = britishVoice;
+                if (selectedVoice) {
+                    utterThis.voice = selectedVoice;
+                } else {
+                    utterThis.lang = 'en-GB'; // Fallback cứng
                 }
                 
                 utterThis.rate = 0.85; // Đọc chậm hơn một chút cho trẻ
                 utterThis.pitch = 1.1; // Giọng cao hơn một chút, vui vẻ
-                synth.speak(utterThis);
+                
+                // Fix lỗi nuốt âm đầu trên iOS
+                setTimeout(() => {
+                    synth.speak(utterThis);
+                }, 10);
             }
 
             clearScene() {
@@ -432,10 +446,6 @@
                 
                 // Hiệu ứng rung lắc
                 const startX = mesh.position.x;
-                BABYLON.Animation.CreateAndStartAnimation("shake", mesh, "position.x", 60, 20, startX, startX, 0, null, () => {
-                     mesh.position.x = startX; // Reset vị trí sau khi rung
-                });
-                // Keyframe rung thủ công cho control tốt hơn
                 const animShake = new BABYLON.Animation("shakeX", "position.x", 60, BABYLON.Animation.ANIMATIONTYPE_FLOAT);
                 animShake.setKeys([
                     { frame: 0, value: startX }, { frame: 4, value: startX + 0.4 }, { frame: 8, value: startX - 0.4 },
@@ -509,21 +519,13 @@
                         mesh = BABYLON.MeshBuilder.CreateSphere(word, {diameter: 1.5, segments: 8}, this.scene); // Ít segment để trông sần sùi
                         break;
                     case "fruit_curved": // Banana
-                        mesh = new BABYLON.Mesh("banana_root", this.scene); // Mesh ảo làm cha
-                        const curve = BABYLON.MeshBuilder.CreateTorus("b", {diameter: 2, thickness: 0.6, tessellation: 16}, this.scene);
-                        // Cắt lấy một phần của hình xuyến để tạo độ cong
-                        const cutter = BABYLON.MeshBuilder.CreateBox("cutter", {size:3}, this.scene);
-                        cutter.position.x = 1.5;
-                        // Lưu ý: Web không dùng CSG (phức tạp), dùng cách che thủ công hoặc chấp nhận torus nguyên.
-                        // Đơn giản hóa: Dùng Cylinder cong nhẹ
-                        curve.dispose(); cutter.dispose();
                         mesh = BABYLON.MeshBuilder.CreateCylinder(word, {height:2, diameterTop:0.4, diameterBottom:0.4}, this.scene);
                         mesh.rotation.z = Math.PI/6;
                         // Thêm 2 đầu nhỏ màu nâu/xanh
                         const tip1 = BABYLON.MeshBuilder.CreateSphere("t1",{diameter:0.45},this.scene); tip1.parent=mesh; tip1.position.y=1;
                         tip1.material = new BABYLON.StandardMaterial("tg",this.scene); tip1.material.diffuseColor=new BABYLON.Color3(0.5,0.8,0.2);
                         break;
-                     case "fruit_pear":
+                      case "fruit_pear":
                         mesh = BABYLON.MeshBuilder.CreateSphere("pear_bot", {diameter: 1.6, slice: 0.6}, this.scene);
                         const topPear = BABYLON.MeshBuilder.CreateSphere("pear_top", {diameter: 1.1}, this.scene);
                         topPear.position.y = 0.7; topPear.parent = mesh;
