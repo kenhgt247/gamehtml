@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root {
-            --bg-color: #FFF9C4; /* Pastel Yellow */
+            --bg-color: #FFF9C4;
             --header-bg: #FFFFFF;
             --text-color: #5D4037;
             --font-main: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
@@ -25,7 +25,6 @@
             display: flex; flex-direction: column;
         }
 
-        /* --- UI UTILS --- */
         .hidden { display: none !important; }
         .screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -43,7 +42,6 @@
         .btn:active { transform: translateY(4px); box-shadow: none; }
         .btn-small { padding: 8px 15px; font-size: 1rem; box-shadow: 0 3px 0 #D84315; }
 
-        /* --- GAME HEADER --- */
         #header {
             height: 70px; width: 100%; background: var(--header-bg);
             display: flex; justify-content: space-between; align-items: center;
@@ -52,7 +50,6 @@
         .stat-group { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.1rem; }
         .hearts { color: #FF5252; font-size: 1.5rem; letter-spacing: 2px; }
 
-        /* --- INSTRUCTION BAR --- */
         #instruction-bar {
             background: #FFF; margin: 10px; padding: 10px 20px;
             border-radius: 15px; display: flex; align-items: center; justify-content: center;
@@ -67,14 +64,12 @@
         }
         .speak-btn:active { transform: translateY(2px); box-shadow: none; }
 
-        /* --- GAME AREA --- */
         #game-area {
             flex: 1; width: 100%; max-width: 800px; margin: 0 auto;
             display: flex; flex-direction: column;
             padding: 10px; position: relative;
         }
 
-        /* BASKETS ZONE */
         #baskets-container {
             flex: 1; display: flex; justify-content: space-around; align-items: flex-end;
             padding-bottom: 20px; width: 100%;
@@ -88,11 +83,6 @@
             background: rgba(255,255,255,0.5);
             transition: transform 0.2s;
         }
-        .basket::before {
-            content: ''; position: absolute; top: -20px; left: -4px; right: -4px; height: 20px;
-            border: 4px solid rgba(0,0,0,0.1); border-radius: 50%; background: inherit;
-            z-index: -1;
-        }
         .basket-label {
             font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;
             background: #FFF; padding: 5px 15px; border-radius: 20px;
@@ -101,7 +91,6 @@
         }
         .basket-icon { font-size: 3rem; position: absolute; bottom: 50px; opacity: 0.3; }
 
-        /* ITEMS ZONE */
         #items-container {
             height: 120px; background: rgba(255,255,255,0.3); border-radius: 20px;
             display: flex; justify-content: center; align-items: center; gap: 15px;
@@ -115,21 +104,16 @@
             position: relative; z-index: 5;
             transition: transform 0.2s;
         }
-        .item:active { cursor: grabbing; transform: scale(1.1); }
         .item-emoji { font-size: 2.5rem; line-height: 1; }
         .item-name { font-size: 0.7rem; font-weight: bold; color: #888; margin-top: 2px; text-transform: uppercase; }
 
-        /* ANIMATIONS */
-        .basket.shake { animation: shake 0.4s; background: #FFCDD2; }
         .basket.highlight { box-shadow: 0 0 20px #FFD700; transform: scale(1.05); border-color: #FFD700; }
         .item.highlight { animation: bounce 1s infinite; border: 2px solid #FFD700; }
-        .item.dragging { opacity: 0.8; z-index: 100; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .item.dragging { opacity: 0.8; z-index: 100; box-shadow: 0 10px 20px rgba(0,0,0,0.2); transform: scale(1.2); }
 
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         @keyframes popIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-        /* RESPONSIVE */
         @media (max-width: 400px) {
             .basket { height: 120px; }
             .basket-label { font-size: 0.9rem; padding: 2px 10px; }
@@ -167,11 +151,8 @@
         </div>
 
         <div id="game-area">
-            <div id="items-container">
-                </div>
-
-            <div id="baskets-container">
-                </div>
+            <div id="items-container"></div>
+            <div id="baskets-container"></div>
         </div>
     </div>
 
@@ -192,47 +173,57 @@
     <script>
         // --- DATA ---
         const CATEGORIES = {
-            animals: { 
-                id: 'animals', label: 'ANIMALS', color: '#FFCC80', icon: '🐾',
-                items: [
-                    {n:'Lion', e:'🦁'}, {n:'Dog', e:'🐶'}, {n:'Cat', e:'🐱'}, {n:'Pig', e:'🐷'}, {n:'Frog', e:'🐸'}, 
-                    {n:'Bear', e:'🐻'}, {n:'Duck', e:'🦆'}, {n:'Cow', e:'🐮'}
-                ]
-            },
-            fruits: { 
-                id: 'fruits', label: 'FRUITS', color: '#C5E1A5', icon: '🍇',
-                items: [
-                    {n:'Apple', e:'🍎'}, {n:'Banana', e:'🍌'}, {n:'Grape', e:'🍇'}, {n:'Orange', e:'🍊'}, {n:'Lemon', e:'🍋'},
-                    {n:'Peach', e:'🍑'}, {n:'Pear', e:'🍐'}, {n:'Berry', e:'🍓'}
-                ]
-            },
-            toys: { 
-                id: 'toys', label: 'TOYS', color: '#81D4FA', icon: '🧸',
-                items: [
-                    {n:'Ball', e:'⚽'}, {n:'Car', e:'🚗'}, {n:'Doll', e:'🎎'}, {n:'Robot', e:'🤖'}, {n:'Kite', e:'🪁'},
-                    {n:'Bear', e:'🧸'}, {n:'Yoyo', e:'🪀'}, {n:'Block', e:'🧱'}
-                ]
-            },
-            vehicles: {
-                id: 'vehicles', label: 'VEHICLES', color: '#CE93D8', icon: '🚗',
-                items: [
-                    {n:'Bus', e:'🚌'}, {n:'Car', e:'🚗'}, {n:'Plane', e:'✈️'}, {n:'Ship', e:'🚢'}, {n:'Bike', e:'🚲'},
-                    {n:'Taxi', e:'🚖'}, {n:'Train', e:'🚂'}, {n:'Truck', e:'🚚'}
-                ]
-            },
-            clothes: {
-                id: 'clothes', label: 'CLOTHES', color: '#F48FB1', icon: '👕',
-                items: [
-                    {n:'Shirt', e:'👕'}, {n:'Dress', e:'👗'}, {n:'Hat', e:'👒'}, {n:'Sock', e:'🧦'}, {n:'Shoe', e:'👟'},
-                    {n:'Coat', e:'🧥'}, {n:'Jeans', e:'👖'}, {n:'Scarf', e:'🧣'}
-                ]
-            }
+            animals: { id: 'animals', label: 'ANIMALS', color: '#FFCC80', icon: '🐾', items: [{n:'Lion', e:'🦁'}, {n:'Dog', e:'🐶'}, {n:'Cat', e:'🐱'}, {n:'Pig', e:'🐷'}, {n:'Frog', e:'🐸'}, {n:'Bear', e:'🐻'}, {n:'Duck', e:'🦆'}, {n:'Cow', e:'🐮'}] },
+            fruits: { id: 'fruits', label: 'FRUITS', color: '#C5E1A5', icon: '🍇', items: [{n:'Apple', e:'🍎'}, {n:'Banana', e:'🍌'}, {n:'Grape', e:'🍇'}, {n:'Orange', e:'🍊'}, {n:'Lemon', e:'🍋'}, {n:'Peach', e:'🍑'}, {n:'Pear', e:'🍐'}, {n:'Berry', e:'🍓'}] },
+            toys: { id: 'toys', label: 'TOYS', color: '#81D4FA', icon: '🧸', items: [{n:'Ball', e:'⚽'}, {n:'Car', e:'🚗'}, {n:'Doll', e:'🎎'}, {n:'Robot', e:'🤖'}, {n:'Kite', e:'🪁'}, {n:'Bear', e:'🧸'}, {n:'Yoyo', e:'🪀'}, {n:'Block', e:'🧱'}] },
+            vehicles: { id: 'vehicles', label: 'VEHICLES', color: '#CE93D8', icon: '🚗', items: [{n:'Bus', e:'🚌'}, {n:'Car', e:'🚗'}, {n:'Plane', e:'✈️'}, {n:'Ship', e:'🚢'}, {n:'Bike', e:'🚲'}, {n:'Taxi', e:'🚖'}, {n:'Train', e:'🚂'}, {n:'Truck', e:'🚚'}] },
+            clothes: { id: 'clothes', label: 'CLOTHES', color: '#F48FB1', icon: '👕', items: [{n:'Shirt', e:'👕'}, {n:'Dress', e:'👗'}, {n:'Hat', e:'👒'}, {n:'Sock', e:'🧦'}, {n:'Shoe', e:'👟'}, {n:'Coat', e:'🧥'}, {n:'Jeans', e:'👖'}, {n:'Scarf', e:'🧣'}] }
         };
 
-        // --- AUDIO ENGINE ---
+        // --- HỆ THỐNG ÂM THANH CHUẨN ANH-ANH (FIX CHO IPHONE) ---
         const AudioSys = {
             ctx: null,
-            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            synth: window.speechSynthesis,
+            selectedVoice: null,
+
+            init: function() { 
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+                this.loadVoices();
+                
+                // Safari iOS load giọng chậm, cần sự kiện này
+                if (this.synth.onvoiceschanged !== undefined) {
+                    this.synth.onvoiceschanged = this.loadVoices.bind(this);
+                }
+                
+                // Hack: Thử load lại liên tục trong vài giây đầu để bắt giọng trên iPhone
+                let attempts = 0;
+                let interval = setInterval(() => {
+                    if (this.selectedVoice || attempts > 10) clearInterval(interval);
+                    this.loadVoices();
+                    attempts++;
+                }, 500);
+            },
+
+            loadVoices: function() {
+                const voices = this.synth.getVoices();
+                if (voices.length === 0) return;
+
+                // THỨ TỰ ƯU TIÊN TÌM GIỌNG ANH-ANH:
+                // 1. "Daniel" (Giọng nam chuẩn nhất trên iOS)
+                // 2. "Arthur" / "Martha" (Giọng Anh khác trên iOS)
+                // 3. "Google UK English" (Trên Android/Chrome)
+                // 4. Bất kỳ giọng nào có mã 'en-GB'
+                
+                this.selectedVoice = 
+                    voices.find(v => v.name === 'Daniel') || 
+                    voices.find(v => v.name === 'Arthur') || 
+                    voices.find(v => v.name === 'Martha') || 
+                    voices.find(v => v.name.includes('Google UK English')) || 
+                    voices.find(v => v.lang === 'en-GB');
+                
+                // console.log("Voice set to:", this.selectedVoice ? this.selectedVoice.name : "Default");
+            },
+
             playTone: function(freq, type, duration) {
                 if (!this.ctx) this.init();
                 if(this.ctx.state === 'suspended') this.ctx.resume();
@@ -246,11 +237,31 @@
             },
             correct: function() { this.playTone(600, 'sine', 0.1); setTimeout(() => this.playTone(800, 'sine', 0.2), 100); },
             wrong: function() { this.playTone(150, 'sawtooth', 0.3); },
+            
             speak: function(text) {
-                window.speechSynthesis.cancel();
+                // iOS Hack: Resume context nếu bị suspended
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                
+                if (this.synth.speaking) this.synth.cancel();
+
+                // Đảm bảo đã có giọng
+                if (!this.selectedVoice) this.loadVoices();
+
                 const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'en-US'; u.rate = 0.9;
-                window.speechSynthesis.speak(u);
+                
+                if (this.selectedVoice) {
+                    u.voice = this.selectedVoice;
+                } else {
+                    u.lang = 'en-GB'; // Fallback cuối cùng
+                }
+                
+                u.rate = 0.85; // Đọc chậm rãi cho trẻ em
+                u.pitch = 1.1; // Giọng vui tươi
+                
+                // Timeout nhỏ để fix lỗi nuốt âm trên một số bản iOS cũ
+                setTimeout(() => {
+                    this.synth.speak(u);
+                }, 10);
             }
         };
 
@@ -273,7 +284,7 @@
                 document.getElementById('start-screen').classList.add('hidden');
                 document.getElementById('game-ui').classList.remove('hidden');
                 this.level = 1;
-                AudioSys.init();
+                AudioSys.init(); // Kích hoạt âm thanh
                 this.startLevel();
             }
 
@@ -288,20 +299,18 @@
 
                 if (this.level <= 3) {
                     cats = ['animals', 'fruits'];
-                    itemCount = 3 + (this.level - 1); // 3, 4, 5
+                    itemCount = 3 + (this.level - 1); 
                 } else if (this.level <= 7) {
                     cats = ['toys', 'vehicles', 'animals'];
-                    itemCount = 5 + (this.level - 4); // 5, 6, 7, 8
+                    itemCount = 5 + (this.level - 4); 
                 } else {
                     cats = ['clothes', 'fruits', 'vehicles'];
-                    itemCount = 8 + (this.level - 7); // 9, 10, 11
+                    itemCount = 8 + (this.level - 7); 
                 }
 
-                // Randomize categories just in case
                 cats = cats.sort(() => 0.5 - Math.random());
                 this.activeCategories = cats.map(k => CATEGORIES[k]);
                 
-                // Generate Item Pool
                 this.poolItems = [];
                 for(let i=0; i<itemCount; i++) {
                     const randomCat = this.activeCategories[Math.floor(Math.random() * this.activeCategories.length)];
@@ -318,7 +327,6 @@
             }
 
             renderScene() {
-                // Render Baskets
                 const basketContainer = document.getElementById('baskets-container');
                 basketContainer.innerHTML = '';
                 this.activeCategories.forEach(cat => {
@@ -333,7 +341,6 @@
                     basketContainer.appendChild(el);
                 });
 
-                // Render Items
                 this.renderItems();
             }
 
@@ -360,11 +367,8 @@
                     this.completeLevel();
                     return;
                 }
-                // Target specifically the first item available or random?
-                // Game design: Let's make the player find a SPECIFIC item to teach vocab.
                 this.currentTarget = this.poolItems[0];
                 
-                // Update text
                 const catName = this.activeCategories.find(c => c.id === this.currentTarget.catId).label;
                 const text = `Put ${this.currentTarget.n.toUpperCase()} into ${catName}`;
                 document.getElementById('task-text').innerText = text;
@@ -374,21 +378,7 @@
 
             setupDrag(el) {
                 el.onpointerdown = (e) => {
-                    // Only allow dragging the current target? Or any item?
-                    // To make it flexible but guided: Allow dragging ANY item, 
-                    // but check if it matches the current target instruction logic 
-                    // OR just check if it matches the basket.
-                    // Implementation: If prompt says "Put APPLE", and kid drags "BANANA" to Fruit basket:
-                    // It is technically correct categorization but wrong instruction.
-                    // Easier for kids: Allow sorting ANY item correctly, and update instruction if they pick something else.
-                    // STRICT MODE based on prompt "Put APPLE into FRUITS":
-                    // If they drag Banana, it should snap back or update prompt?
-                    // Let's implement: Must drag the TARGET item.
-                    
-                    if (el.dataset.id !== this.currentTarget.id) {
-                        // Optional: wiggle to say "Not this one"
-                        return; 
-                    }
+                    if (el.dataset.id !== this.currentTarget.id) return; 
 
                     el.setPointerCapture(e.pointerId);
                     this.dragEl = el;
@@ -421,7 +411,6 @@
             }
 
             checkCollision(x, y) {
-                // Hide drag element to check underlying elements
                 this.dragEl.style.visibility = 'hidden';
                 const elemBelow = document.elementFromPoint(x, y);
                 this.dragEl.style.visibility = 'visible';
@@ -434,27 +423,22 @@
                 const basketCat = basketEl.dataset.catId;
 
                 if (itemCat === basketCat) {
-                    // Correct
                     AudioSys.correct();
-                    // Animation: fly into basket
                     this.dragEl.style.transition = 'all 0.3s';
                     this.dragEl.style.transform = 'scale(0)';
                     this.dragEl.style.opacity = '0';
                     
-                    // Remove from data
                     this.poolItems = this.poolItems.filter(i => i.id !== this.currentTarget.id);
                     
-                    // Confetti on basket
                     const rect = basketEl.getBoundingClientRect();
                     confetti({ origin: { x: (rect.left+rect.width/2)/window.innerWidth, y: (rect.top+rect.height/2)/window.innerHeight }, particleCount: 30, spread: 50 });
 
                     setTimeout(() => {
-                        this.renderItems(); // Refresh DOM
+                        this.renderItems();
                         this.pickNextTarget();
                     }, 500);
 
                 } else {
-                    // Wrong
                     AudioSys.wrong();
                     AudioSys.speak("Oops, try again!");
                     basketEl.classList.add('shake');
@@ -494,11 +478,9 @@
                     this.hints--;
                     this.updateHUD();
                     
-                    // Highlight Item
                     const itemEl = document.querySelector(`.item[data-id="${this.currentTarget.id}"]`);
                     if(itemEl) itemEl.classList.add('highlight');
 
-                    // Highlight Basket
                     const basketEl = document.querySelector(`.basket[data-cat-id="${this.currentTarget.catId}"]`);
                     if(basketEl) basketEl.classList.add('highlight');
 
@@ -556,6 +538,11 @@
         }
 
         const game = new Game();
+
+        // iOS Audio Unlock on first touch
+        window.addEventListener('touchstart', function() {
+            if (AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+        }, {once:true});
 
         // Prevent Pull-to-refresh
         document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
